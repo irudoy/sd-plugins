@@ -1,0 +1,38 @@
+{
+  "Actions": [
+    {
+      "Icon": "static/img/vpnIcon",
+      "Name": "VPN Status",
+      "States": [
+        {
+          "Image": "static/img/vpnAction"
+        }
+      ],
+      "Controllers": ["Keypad", "Information"],
+      "UUID": "com.isrudoy.unifi.vpn",
+      "PropertyInspectorPath": "vpn/index.html",
+      "Tooltip": "Shows Unifi VPN client status"
+    }
+  ],
+  "SDKVersion": 1,
+  "Author": "isrudoy",
+  "Name": "Unifi Network",
+  "Icon": "static/img/pluginIcon",
+  "CodePathMac": "plugin/index.js",
+  "Description": "Monitor Unifi Network VPN connections",
+  "Category": "Unifi Network",
+  "CategoryIcon": "static/img/categoryIcon",
+  "Version": "1.0.0",
+  "OS": [
+    {
+      "Platform": "mac",
+      "MinimumVersion": "10.11"
+    }
+  ],
+  "Software": {
+    "MinimumVersion": "3.10.188.226"
+  },
+  "Nodejs": {
+    "Version": "20"
+  }
+}

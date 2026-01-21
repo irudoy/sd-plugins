@@ -1,0 +1,16 @@
+{
+  "name": "com.isrudoy.unifi",
+  "version": "1.0.0",
+  "description": "Unifi Network plugin for StreamDock",
+  "main": "plugin/index.js",
+  "scripts": {
+    "link": "ln -sf \"$(pwd)\" ~/Library/Application\\ Support/HotSpot/StreamDock/plugins/",
+    "unlink": "rm -f ~/Library/Application\\ Support/HotSpot/StreamDock/plugins/com.isrudoy.unifi.sdPlugin"
+  },
+  "author": "isrudoy",
+  "license": "MIT",
+  "dependencies": {
+    "canvas": "^2.11.2",
+    "ws": "^8.14.2"
+  }
+}
