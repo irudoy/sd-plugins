@@ -1,0 +1,26 @@
+{
+    "Name": "Mac Tools",
+    "Description": "macOS system utilities for StreamDock",
+    "Category": "Mac Tools",
+    "com.isrudoy.mactools.driveinfo": {
+        "Name": "Drive Info",
+        "Tooltip": "Shows information about disk drives"
+    },
+    "Localization": {
+        "Drive Info Settings": "Drive Info Settings",
+        "Mode": "Mode",
+        "Single Drive": "Single Drive",
+        "All Drives (Rotate)": "All Drives (Rotate)",
+        "Drive": "Drive",
+        "Loading...": "Loading...",
+        "No drives found": "No drives found",
+        "Rotate every": "Rotate every",
+        "sec": "sec",
+        "Thresholds": "Thresholds",
+        "Low Space": "Low Space",
+        "Critical Space": "Critical Space",
+        "Display Options": "Display Options",
+        "Show drive name": "Show drive name",
+        "Show free space (invert bar)": "Show free space (invert bar)"
+    }
+}

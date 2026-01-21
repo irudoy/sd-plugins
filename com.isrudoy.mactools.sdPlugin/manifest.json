@@ -1,0 +1,41 @@
+{
+  "Actions": [
+    {
+      "Icon": "static/img/driveIcon",
+      "Name": "Drive Info",
+      "States": [
+        {
+          "Image": "static/img/driveAction",
+          "TitleAlignment": "middle",
+          "FontSize": "16"
+        }
+      ],
+      "Controllers": ["Keypad", "Information"],
+      "SupportedInMultiActions": false,
+      "Tooltip": "Shows information about disk drives",
+      "UUID": "com.isrudoy.mactools.driveinfo",
+      "PropertyInspectorPath": "driveinfo/index.html"
+    }
+  ],
+  "SDKVersion": 1,
+  "Author": "isrudoy",
+  "Name": "Mac Tools",
+  "Icon": "static/img/pluginIcon",
+  "CodePathMac": "plugin/index.js",
+  "Description": "macOS system utilities for StreamDock",
+  "Category": "Mac Tools",
+  "CategoryIcon": "static/img/categoryIcon",
+  "Version": "1.0.0",
+  "OS": [
+    {
+      "Platform": "mac",
+      "MinimumVersion": "10.11"
+    }
+  ],
+  "Software": {
+    "MinimumVersion": "3.10.188.226"
+  },
+  "Nodejs": {
+    "Version": "20"
+  }
+}
