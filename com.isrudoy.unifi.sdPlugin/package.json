@@ -3,15 +3,10 @@
   "version": "1.0.0",
   "description": "Unifi Network plugin for StreamDock",
   "main": "plugin/index.js",
-  "scripts": {
-    "restart": "pkill -f 'node.*com.isrudoy.*sdPlugin'; pkill -x StreamDock; sleep 1; open -a StreamDock",
-    "link": "ln -sf \"$(pwd)\" \"$HOME/Library/Application Support/HotSpot/StreamDock/plugins/com.isrudoy.unifi.sdPlugin\"",
-    "unlink": "rm -f \"$HOME/Library/Application Support/HotSpot/StreamDock/plugins/com.isrudoy.unifi.sdPlugin\""
+  "dependencies": {
+    "canvas": "3.2.1",
+    "ws": "8.14.2"
   },
   "author": "isrudoy",
-  "license": "MIT",
-  "dependencies": {
-    "canvas": "^2.11.2",
-    "ws": "^8.14.2"
-  }
+  "license": "MIT"
 }

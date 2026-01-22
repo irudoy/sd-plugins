@@ -3,15 +3,9 @@
   "version": "1.0.0",
   "description": "macOS system utilities for StreamDock",
   "main": "plugin/index.js",
-  "scripts": {
-    "start": "node plugin/index.js",
-    "restart": "pkill -f 'node.*com.isrudoy.*sdPlugin'; pkill -x StreamDock; sleep 1; open -a StreamDock",
-    "link": "ln -sf \"$(pwd)\" \"$HOME/Library/Application Support/HotSpot/StreamDock/plugins/com.isrudoy.mactools.sdPlugin\"",
-    "unlink": "rm -f \"$HOME/Library/Application Support/HotSpot/StreamDock/plugins/com.isrudoy.mactools.sdPlugin\""
-  },
   "dependencies": {
-    "canvas": "^3.2.1",
-    "ws": "^8.14.0"
+    "canvas": "3.2.1",
+    "ws": "8.14.2"
   },
   "author": "isrudoy",
   "license": "MIT"
