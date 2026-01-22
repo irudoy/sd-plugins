@@ -18,8 +18,8 @@ let currentPIContext = null;
 
 // Battery device cache
 const deviceCache = {
-    apple: [],
-    razer: []
+  apple: [],
+  razer: [],
 };
 
 // ============================================================
@@ -27,46 +27,46 @@ const deviceCache = {
 // ============================================================
 
 function setContext(context, data) {
-    contexts[context] = data;
+  contexts[context] = data;
 }
 
 function deleteContext(context) {
-    delete contexts[context];
+  delete contexts[context];
 }
 
 function setTimer(context, timer) {
-    timers[context] = timer;
+  timers[context] = timer;
 }
 
 function stopTimer(context) {
-    if (timers[context]) {
-        clearInterval(timers[context]);
-        delete timers[context];
-    }
+  if (timers[context]) {
+    clearInterval(timers[context]);
+    delete timers[context];
+  }
 }
 
 function getCurrentPI() {
-    return { action: currentPIAction, context: currentPIContext };
+  return { action: currentPIAction, context: currentPIContext };
 }
 
 function setCurrentPI(action, context) {
-    currentPIAction = action;
-    currentPIContext = context;
+  currentPIAction = action;
+  currentPIContext = context;
 }
 
 function clearCurrentPI(context) {
-    if (currentPIContext === context) {
-        currentPIContext = null;
-        currentPIAction = null;
-    }
+  if (currentPIContext === context) {
+    currentPIContext = null;
+    currentPIAction = null;
+  }
 }
 
 function getDeviceCache(type) {
-    return deviceCache[type] || [];
+  return deviceCache[type] || [];
 }
 
 function setDeviceCache(type, devices) {
-    deviceCache[type] = devices;
+  deviceCache[type] = devices;
 }
 
 // ============================================================
@@ -74,15 +74,15 @@ function setDeviceCache(type, devices) {
 // ============================================================
 
 module.exports = {
-    contexts,
-    timers,
-    setContext,
-    deleteContext,
-    setTimer,
-    stopTimer,
-    getCurrentPI,
-    setCurrentPI,
-    clearCurrentPI,
-    getDeviceCache,
-    setDeviceCache
+  contexts,
+  timers,
+  setContext,
+  deleteContext,
+  setTimer,
+  stopTimer,
+  getCurrentPI,
+  setCurrentPI,
+  clearCurrentPI,
+  getDeviceCache,
+  setDeviceCache,
 };
