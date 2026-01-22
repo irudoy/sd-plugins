@@ -1,0 +1,175 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, minimum-scale=1, user-scalable=no">
+    <title>Battery Monitor - Settings</title>
+    <link rel="stylesheet" href="../static/css/sdpi.css">
+    <script src="../static/common.js"></script>
+    <script src="../static/sd-action.js"></script>
+    <style>
+        select {
+            color: rgb(180, 180, 180);
+        }
+        .device-info {
+            padding: 4px 0;
+            font-size: 9pt;
+            color: #888;
+        }
+        .status-message {
+            padding: 8px 12px;
+            margin: 4px 0;
+            border-radius: 4px;
+            font-size: 9pt;
+        }
+        .status-success {
+            background-color: rgba(76, 175, 80, 0.2);
+            color: #4CAF50;
+        }
+        .status-error {
+            background-color: rgba(244, 67, 54, 0.2);
+            color: #F44336;
+        }
+        .status-warning {
+            background-color: rgba(255, 193, 7, 0.2);
+            color: #FFC107;
+        }
+        .status-info {
+            background-color: rgba(33, 150, 243, 0.2);
+            color: #2196F3;
+        }
+        #statusMessage {
+            display: none;
+        }
+        #warningMessage {
+            display: none;
+        }
+        #permissionError {
+            display: none;
+            background-color: rgba(255, 152, 0, 0.15);
+            border: 1px solid rgba(255, 152, 0, 0.4);
+            border-radius: 6px;
+            padding: 12px;
+            margin: 8px 0;
+            font-size: 9pt;
+            color: #FFB74D;
+            line-height: 1.5;
+        }
+        #permissionError b {
+            color: #FFA726;
+        }
+        .code {
+            font-family: monospace;
+            background: rgba(255,255,255,0.1);
+            padding: 2px 4px;
+            border-radius: 3px;
+        }
+        .device-type-apple {
+            color: #AAAAAA;
+        }
+        .device-type-razer {
+            color: #44D62C;
+        }
+        .optional-label {
+            font-size: 8pt;
+            color: #666;
+            font-style: italic;
+        }
+    </style>
+</head>
+<body>
+    <div class="sdpi-wrapper" style="display: none;">
+        <div class="sdpi-heading">Battery Monitor</div>
+
+        <!-- Warning Message for node-hid -->
+        <div class="sdpi-item">
+            <div class="sdpi-item-label empty"></div>
+            <div class="sdpi-item-value">
+                <div id="warningMessage" class="status-message status-warning"></div>
+            </div>
+        </div>
+
+        <!-- Permission Error -->
+        <div class="sdpi-item">
+            <div class="sdpi-item-label empty"></div>
+            <div class="sdpi-item-value">
+                <div id="permissionError"></div>
+            </div>
+        </div>
+
+        <!-- Device 1 -->
+        <div class="sdpi-item">
+            <div class="sdpi-item-label">Device 1</div>
+            <select class="sdpi-item-value" id="device1" onchange="saveSettings()">
+                <option value="">Loading...</option>
+            </select>
+        </div>
+
+        <!-- Update Interval 1 -->
+        <div class="sdpi-item" type="range">
+            <div class="sdpi-item-label">Update</div>
+            <div class="sdpi-item-value">
+                <span class="clickable" onclick="setUpdateInterval1(1)">1</span>
+                <input type="range" id="device1Interval" min="1" max="300" value="30" step="1" oninput="updateIntervalLabel1()" onchange="saveSettings()">
+                <span class="clickable" onclick="setUpdateInterval1(300)">300</span>
+            </div>
+        </div>
+        <div class="sdpi-item">
+            <div class="sdpi-item-label empty"></div>
+            <div class="sdpi-item-value">
+                <span id="device1IntervalLabel">30 sec</span>
+            </div>
+        </div>
+
+        <!-- Device 2 (optional) -->
+        <div class="sdpi-item">
+            <div class="sdpi-item-label">Device 2 <span class="optional-label">(opt)</span></div>
+            <select class="sdpi-item-value" id="device2" onchange="saveSettings()">
+                <option value="">Loading...</option>
+            </select>
+        </div>
+
+        <!-- Update Interval 2 -->
+        <div class="sdpi-item" type="range">
+            <div class="sdpi-item-label">Update</div>
+            <div class="sdpi-item-value">
+                <span class="clickable" onclick="setUpdateInterval2(1)">1</span>
+                <input type="range" id="device2Interval" min="1" max="300" value="30" step="1" oninput="updateIntervalLabel2()" onchange="saveSettings()">
+                <span class="clickable" onclick="setUpdateInterval2(300)">300</span>
+            </div>
+        </div>
+        <div class="sdpi-item">
+            <div class="sdpi-item-label empty"></div>
+            <div class="sdpi-item-value">
+                <span id="device2IntervalLabel">30 sec</span>
+            </div>
+        </div>
+
+        <!-- Refresh Button -->
+        <div class="sdpi-item">
+            <div class="sdpi-item-label empty"></div>
+            <button class="sdpi-item-value" onclick="refreshDevices()">Refresh device list</button>
+        </div>
+
+        <!-- Status Message -->
+        <div class="sdpi-item">
+            <div class="sdpi-item-label empty"></div>
+            <div class="sdpi-item-value">
+                <div id="statusMessage" class="status-message"></div>
+            </div>
+        </div>
+
+        <div class="sdpi-heading">Info</div>
+        <div class="sdpi-item">
+            <div class="sdpi-item-label empty"></div>
+            <div class="sdpi-item-value device-info">
+                Monitors battery level for Apple Bluetooth devices (Magic Trackpad, Magic Mouse, Magic Keyboard) and Razer wireless mice.
+                <br><br>
+                Select one device for full-size display, or two devices for compact split view.
+            </div>
+        </div>
+    </div>
+
+    <script src="index.js"></script>
+</body>
+</html>

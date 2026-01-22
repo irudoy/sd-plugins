@@ -15,6 +15,32 @@
       "Tooltip": "Shows information about disk drives",
       "UUID": "com.isrudoy.mactools.driveinfo",
       "PropertyInspectorPath": "driveinfo/index.html"
+    },
+    {
+      "Icon": "static/img/batteryIcon",
+      "Name": "Battery Monitor",
+      "States": [
+        {
+          "Image": "static/img/batteryAction"
+        }
+      ],
+      "Controllers": ["Keypad", "Information"],
+      "Tooltip": "Shows battery level for Apple and Razer devices",
+      "UUID": "com.isrudoy.mactools.battery",
+      "PropertyInspectorPath": "battery/index.html"
+    },
+    {
+      "Icon": "static/img/osascriptIcon",
+      "Name": "Run Script",
+      "States": [
+        {
+          "Image": "static/img/osascriptAction"
+        }
+      ],
+      "Controllers": ["Keypad"],
+      "Tooltip": "Run AppleScript or JavaScript (JXA)",
+      "UUID": "com.isrudoy.mactools.osascript",
+      "PropertyInspectorPath": "osascript/index.html"
     }
   ],
   "SDKVersion": 1,
