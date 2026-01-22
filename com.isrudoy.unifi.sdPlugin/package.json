@@ -4,8 +4,9 @@
   "description": "Unifi Network plugin for StreamDock",
   "main": "plugin/index.js",
   "scripts": {
-    "link": "ln -sf \"$(pwd)\" ~/Library/Application\\ Support/HotSpot/StreamDock/plugins/",
-    "unlink": "rm -f ~/Library/Application\\ Support/HotSpot/StreamDock/plugins/com.isrudoy.unifi.sdPlugin"
+    "restart": "pkill -f 'node.*com.isrudoy.*sdPlugin'; pkill -x StreamDock; sleep 1; open -a StreamDock",
+    "link": "ln -sf \"$(pwd)\" \"$HOME/Library/Application Support/HotSpot/StreamDock/plugins/com.isrudoy.unifi.sdPlugin\"",
+    "unlink": "rm -f \"$HOME/Library/Application Support/HotSpot/StreamDock/plugins/com.isrudoy.unifi.sdPlugin\""
   },
   "author": "isrudoy",
   "license": "MIT",
