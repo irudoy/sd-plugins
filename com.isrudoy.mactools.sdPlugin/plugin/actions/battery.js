@@ -97,45 +97,57 @@ function parseDeviceId(deviceId) {
     };
 }
 
-function getAllBatteryDevices(callback) {
-    getAppleDevices((appleError, appleDevices) => {
-        const allDevices = [];
+async function getAllBatteryDevicesAsync() {
+    const allDevices = [];
 
-        if (!appleError && appleDevices) {
-            const mergedApple = getMergedDeviceList('apple', appleDevices);
-            for (const device of mergedApple) {
-                allDevices.push({ ...device, type: 'apple' });
-            }
-        }
-
-        const razerDevices = getRazerDevices();
-        const razerWithBattery = razerDevices.map(d => {
-            const result = getRazerBattery(d);
-            return {
-                name: d.name,
-                battery: result.battery,
-                isWired: d.isWired,
-                isCharging: result.isCharging,
-                error: result.error
-            };
+    // Get Apple devices (callback-based, wrap in Promise)
+    const appleDevices = await new Promise(resolve => {
+        getAppleDevices((error, devices) => {
+            resolve(error ? [] : devices);
         });
-        const mergedRazer = getMergedDeviceList('razer', razerWithBattery);
-        for (const device of mergedRazer) {
-            allDevices.push({ ...device, type: 'razer' });
-        }
-
-        callback(null, allDevices);
     });
+
+    const mergedApple = getMergedDeviceList('apple', appleDevices);
+    for (const device of mergedApple) {
+        allDevices.push({ ...device, type: 'apple' });
+    }
+
+    // Get Razer devices (now async)
+    const razerDevices = getRazerDevices();
+    const razerWithBattery = await Promise.all(razerDevices.map(async d => {
+        const result = await getRazerBattery(d);
+        return {
+            name: d.name,
+            battery: result.battery,
+            isWired: d.isWired,
+            isCharging: result.isCharging,
+            error: result.error
+        };
+    }));
+    const mergedRazer = getMergedDeviceList('razer', razerWithBattery);
+    for (const device of mergedRazer) {
+        allDevices.push({ ...device, type: 'razer' });
+    }
+
+    return allDevices;
 }
 
-function getDeviceByTypeAndName(type, name, callback) {
+function getAllBatteryDevices(callback) {
+    getAllBatteryDevicesAsync()
+        .then(devices => callback(null, devices))
+        .catch(err => callback(err, []));
+}
+
+async function getDeviceByTypeAndNameAsync(type, name) {
     if (type === 'apple') {
-        getAppleBattery(name, (error, device) => {
-            if (error || !device) {
-                callback(error, null);
-            } else {
-                callback(null, { ...device, type: 'apple' });
-            }
+        return new Promise(resolve => {
+            getAppleBattery(name, (error, device) => {
+                if (error || !device) {
+                    resolve(null);
+                } else {
+                    resolve({ ...device, type: 'apple' });
+                }
+            });
         });
     } else if (type === 'razer') {
         const razerDevices = getRazerDevices();
@@ -145,29 +157,28 @@ function getDeviceByTypeAndName(type, name, callback) {
         }
 
         if (!device) {
-            callback(null, null);
-            return;
+            return null;
         }
 
-        const result = getRazerBattery(device);
-        callback(null, {
+        const result = await getRazerBattery(device);
+        return {
             name: device.name,
             battery: result.battery,
             isCharging: result.isCharging,
             isWired: device.isWired,
             error: result.error,
             type: 'razer'
-        });
+        };
     } else {
-        getAllBatteryDevices((error, allDevices) => {
-            if (error || !allDevices || allDevices.length === 0) {
-                callback(error, null);
-            } else {
-                const deviceWithBattery = allDevices.find(d => d.battery !== null && d.connected !== false);
-                callback(null, deviceWithBattery || allDevices[0]);
-            }
-        });
+        // No device selected - require explicit selection
+        return null;
     }
+}
+
+function getDeviceByTypeAndName(type, name, callback) {
+    getDeviceByTypeAndNameAsync(type, name)
+        .then(device => callback(null, device))
+        .catch(err => callback(err, null));
 }
 
 // ============================================================
@@ -577,7 +588,7 @@ function drawSingleDeviceButton(device) {
 // Update Functions
 // ============================================================
 
-function updateBatteryButton(context, settings = {}) {
+async function updateBatteryButton(context, settings = {}) {
     const device1Id = settings.device1 || '';
     const device2Id = settings.device2 || '';
 
@@ -587,17 +598,17 @@ function updateBatteryButton(context, settings = {}) {
     const isDualMode = device2Id !== '';
 
     if (isDualMode) {
-        getDeviceByTypeAndName(type1, name1, (err1, device1) => {
-            getDeviceByTypeAndName(type2, name2, (err2, device2) => {
-                const imageData = drawDualBattery(device1, device2);
-                setImage(context, imageData);
-            });
-        });
+        // Parallel requests for both devices
+        const [device1, device2] = await Promise.all([
+            getDeviceByTypeAndNameAsync(type1, name1),
+            getDeviceByTypeAndNameAsync(type2, name2)
+        ]);
+        const imageData = drawDualBattery(device1, device2);
+        setImage(context, imageData);
     } else {
-        getDeviceByTypeAndName(type1, name1, (error, device) => {
-            const imageData = drawSingleDeviceButton(device);
-            setImage(context, imageData);
-        });
+        const device = await getDeviceByTypeAndNameAsync(type1, name1);
+        const imageData = drawSingleDeviceButton(device);
+        setImage(context, imageData);
     }
 }
 

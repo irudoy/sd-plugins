@@ -5,7 +5,7 @@
   "main": "plugin/index.js",
   "scripts": {
     "start": "node plugin/index.js",
-    "restart": "pkill -x StreamDock; sleep 1; open -a StreamDock",
+    "restart": "pkill -f 'node.*com.isrudoy.*sdPlugin'; pkill -x StreamDock; sleep 1; open -a StreamDock",
     "link": "ln -sf \"$(pwd)\" \"$HOME/Library/Application Support/HotSpot/StreamDock/plugins/com.isrudoy.mactools.sdPlugin\"",
     "unlink": "rm -f \"$HOME/Library/Application Support/HotSpot/StreamDock/plugins/com.isrudoy.mactools.sdPlugin\""
   },

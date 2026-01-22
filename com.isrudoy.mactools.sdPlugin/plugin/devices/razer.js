@@ -2,6 +2,8 @@
  * Razer HID battery detection for Mac Tools Plugin
  */
 
+const { log } = require('../lib/common');
+
 // ============================================================
 // Razer Constants
 // ============================================================
@@ -41,15 +43,37 @@ function isHIDAvailable() {
 }
 
 // ============================================================
+// HID Mutex (prevents race conditions with multiple widgets)
+// ============================================================
+
+let hidLock = Promise.resolve();
+let lockQueue = 0;
+
+async function withHIDLock(fn) {
+    const queuePos = ++lockQueue;
+    log(`[Razer] HID lock requested (queue: ${queuePos})`);
+    const unlock = hidLock;
+    let resolveLock;
+    hidLock = new Promise(resolve => { resolveLock = resolve; });
+    await unlock;
+    log(`[Razer] HID lock acquired (queue: ${queuePos})`);
+    try {
+        return await fn();
+    } finally {
+        log(`[Razer] HID lock released (queue: ${queuePos})`);
+        resolveLock();
+    }
+}
+
+// ============================================================
 // Helper Functions
 // ============================================================
 
-function sleepSync(ms) {
-    const start = Date.now();
-    while (Date.now() - start < ms) {}
+function sleep(ms) {
+    return new Promise(resolve => setTimeout(resolve, ms));
 }
 
-function sendRazerCommand(device, transactionId, commandClass, commandId) {
+async function sendRazerCommand(device, transactionId, commandClass, commandId) {
     const request = Buffer.alloc(RAZER_PACKET_SIZE);
     request[0] = 0x00;
     request[1] = transactionId;
@@ -64,7 +88,7 @@ function sendRazerCommand(device, transactionId, commandClass, commandId) {
     request[88] = crc;
 
     device.sendFeatureReport([0x00, ...request]);
-    sleepSync(15);
+    await sleep(15);
 
     return device.getFeatureReport(0x00, RAZER_PACKET_SIZE + 1);
 }
@@ -109,54 +133,56 @@ function getRazerDevices() {
     }
 }
 
-function getRazerBattery(deviceInfo) {
+async function getRazerBattery(deviceInfo) {
     const hid = loadHID();
     if (!hid) return { battery: null, isCharging: false, error: 'node-hid not available' };
 
-    let device = null;
+    return withHIDLock(async () => {
+        let device = null;
 
-    try {
-        device = new hid.HID(deviceInfo.path);
+        try {
+            device = new hid.HID(deviceInfo.path);
 
-        const batteryResponse = sendRazerCommand(device, deviceInfo.transactionId, RAZER_CMD_POWER, RAZER_CMD_BATTERY);
+            const batteryResponse = await sendRazerCommand(device, deviceInfo.transactionId, RAZER_CMD_POWER, RAZER_CMD_BATTERY);
 
-        if (!batteryResponse || batteryResponse.length < 11) {
-            return { battery: null, isCharging: false, error: 'Invalid response' };
-        }
-
-        const batteryStatus = batteryResponse[1];
-        const batteryRaw = batteryResponse[10];
-
-        if (batteryStatus !== 2) {
-            if (batteryStatus === 4) {
-                return { battery: null, isCharging: false, error: 'timeout' };
+            if (!batteryResponse || batteryResponse.length < 11) {
+                return { battery: null, isCharging: false, error: 'Invalid response' };
             }
-            if (batteryStatus === 5 || batteryStatus === 3) {
-                return { battery: null, isCharging: false, error: 'not_supported' };
+
+            const batteryStatus = batteryResponse[1];
+            const batteryRaw = batteryResponse[10];
+
+            if (batteryStatus !== 2) {
+                if (batteryStatus === 4) {
+                    return { battery: null, isCharging: false, error: 'timeout' };
+                }
+                if (batteryStatus === 5 || batteryStatus === 3) {
+                    return { battery: null, isCharging: false, error: 'not_supported' };
+                }
+            }
+
+            const chargingResponse = await sendRazerCommand(device, deviceInfo.transactionId, RAZER_CMD_POWER, RAZER_CMD_CHARGING);
+
+            let isCharging = false;
+            if (chargingResponse && chargingResponse.length >= 11 && chargingResponse[1] === 2) {
+                isCharging = chargingResponse[10] === 1;
+            }
+
+            const battery = Math.round(batteryRaw / 255 * 100);
+
+            return { battery, isCharging, error: null };
+        } catch (e) {
+            const errorMsg = e.message || '';
+            if (errorMsg.includes('cannot open device')) {
+                return { battery: null, isCharging: false, error: 'access_denied' };
+            }
+            return { battery: null, isCharging: false, error: errorMsg };
+        } finally {
+            if (device) {
+                try { device.close(); } catch (e) {}
             }
         }
-
-        const chargingResponse = sendRazerCommand(device, deviceInfo.transactionId, RAZER_CMD_POWER, RAZER_CMD_CHARGING);
-
-        let isCharging = false;
-        if (chargingResponse && chargingResponse.length >= 11 && chargingResponse[1] === 2) {
-            isCharging = chargingResponse[10] === 1;
-        }
-
-        const battery = Math.round(batteryRaw / 255 * 100);
-
-        return { battery, isCharging, error: null };
-    } catch (e) {
-        const errorMsg = e.message || '';
-        if (errorMsg.includes('cannot open device')) {
-            return { battery: null, isCharging: false, error: 'access_denied' };
-        }
-        return { battery: null, isCharging: false, error: errorMsg };
-    } finally {
-        if (device) {
-            try { device.close(); } catch (e) {}
-        }
-    }
+    });
 }
 
 // ============================================================
