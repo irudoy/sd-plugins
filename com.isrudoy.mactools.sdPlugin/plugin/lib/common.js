@@ -33,6 +33,10 @@ const COLORS = {
     green: '#4CAF50',
     yellow: '#FFC107',
     red: '#F44336',
+    // Dimmed versions for sleep state
+    dimGreen: '#2D6B30',
+    dimYellow: '#8C6A04',
+    dimRed: '#8B2720',
     divider: '#333344'
 };
 

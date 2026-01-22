@@ -22,6 +22,9 @@ const RAZER_CMD_CHARGING = 0x84;
 // HID library (lazy loaded)
 let HID = null;
 
+// Battery cache - stores last known battery per device path
+const batteryCache = new Map();
+
 // ============================================================
 // HID Loading
 // ============================================================
@@ -154,7 +157,12 @@ async function getRazerBattery(deviceInfo) {
 
             if (batteryStatus !== 2) {
                 if (batteryStatus === 4) {
-                    return { battery: null, isCharging: false, error: 'timeout' };
+                    // Device sleeping - return cached battery with sleeping flag
+                    const cached = batteryCache.get(deviceInfo.path);
+                    if (cached) {
+                        return { battery: cached.battery, isCharging: false, error: null, sleeping: true };
+                    }
+                    return { battery: null, isCharging: false, error: 'timeout', sleeping: true };
                 }
                 if (batteryStatus === 5 || batteryStatus === 3) {
                     return { battery: null, isCharging: false, error: 'not_supported' };
@@ -169,6 +177,9 @@ async function getRazerBattery(deviceInfo) {
             }
 
             const battery = Math.round(batteryRaw / 255 * 100);
+
+            // Cache successful battery reading
+            batteryCache.set(deviceInfo.path, { battery, timestamp: Date.now() });
 
             return { battery, isCharging, error: null };
         } catch (e) {
@@ -186,6 +197,41 @@ async function getRazerBattery(deviceInfo) {
 }
 
 // ============================================================
+// Cache Functions
+// ============================================================
+
+function getCachedRazerBattery(deviceName) {
+    // Find device info by name to get path
+    const hid = loadHID();
+    if (!hid) return null;
+
+    for (const [name, info] of Object.entries(RAZER_DEVICES)) {
+        if (name === deviceName) {
+            for (const pid of info.pids) {
+                const allDevices = hid.devices();
+                const found = allDevices.find(d =>
+                    d.vendorId === RAZER_VID &&
+                    d.productId === pid &&
+                    d.interface === 0 &&
+                    d.usage === 1
+                );
+                if (found && batteryCache.has(found.path)) {
+                    return batteryCache.get(found.path);
+                }
+            }
+        }
+    }
+
+    // Device not found, but we may have cached battery from any Razer device with matching name
+    // Check all cache entries
+    for (const [path, cached] of batteryCache.entries()) {
+        return cached; // Return first available cached battery
+    }
+
+    return null;
+}
+
+// ============================================================
 // Exports
 // ============================================================
 
@@ -195,5 +241,6 @@ module.exports = {
     loadHID,
     isHIDAvailable,
     getRazerDevices,
-    getRazerBattery
+    getRazerBattery,
+    getCachedRazerBattery
 };

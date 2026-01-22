@@ -18,7 +18,7 @@ const {
 const { contexts, stopTimer, setTimer, setContext, setDeviceCache, getDeviceCache } = require('../lib/state');
 const { setImage, sendToPropertyInspector } = require('../lib/websocket');
 const { getAppleDevices, getAppleBattery } = require('../devices/apple');
-const { getRazerDevices, getRazerBattery, loadHID } = require('../devices/razer');
+const { getRazerDevices, getRazerBattery, getCachedRazerBattery, loadHID } = require('../devices/razer');
 
 // ============================================================
 // Device Cache Management
@@ -143,7 +143,27 @@ async function getDeviceByTypeAndNameAsync(type, name) {
         return new Promise(resolve => {
             getAppleBattery(name, (error, device) => {
                 if (error || !device) {
-                    resolve(null);
+                    // Device not connected - check cache
+                    const cache = getDeviceCache('apple');
+                    const cached = cache.find(d => d.name === name);
+                    if (cached) {
+                        resolve({
+                            name: cached.name,
+                            battery: cached.battery,
+                            isCharging: false,
+                            connected: false,
+                            type: 'apple'
+                        });
+                    } else {
+                        // No cache - return device with name from settings
+                        resolve({
+                            name: name,
+                            battery: null,
+                            isCharging: false,
+                            connected: false,
+                            type: 'apple'
+                        });
+                    }
                 } else {
                     resolve({ ...device, type: 'apple' });
                 }
@@ -157,7 +177,25 @@ async function getDeviceByTypeAndNameAsync(type, name) {
         }
 
         if (!device) {
-            return null;
+            // Device not connected - return cached data with connected: false
+            const cached = getCachedRazerBattery(name);
+            if (cached) {
+                return {
+                    name: name,
+                    battery: cached.battery,
+                    isCharging: false,
+                    connected: false,
+                    type: 'razer'
+                };
+            }
+            // No cache - return device with name from settings
+            return {
+                name: name,
+                battery: null,
+                isCharging: false,
+                connected: false,
+                type: 'razer'
+            };
         }
 
         const result = await getRazerBattery(device);
@@ -166,6 +204,7 @@ async function getDeviceByTypeAndNameAsync(type, name) {
             battery: result.battery,
             isCharging: result.isCharging,
             isWired: device.isWired,
+            sleeping: result.sleeping,
             error: result.error,
             type: 'razer'
         };
@@ -192,6 +231,15 @@ function getBatteryColor(percent) {
         return COLORS.yellow;
     }
     return COLORS.red;
+}
+
+function getDimBatteryColor(percent) {
+    if (percent > BATTERY_THRESHOLDS.high) {
+        return COLORS.dimGreen;
+    } else if (percent > BATTERY_THRESHOLDS.low) {
+        return COLORS.dimYellow;
+    }
+    return COLORS.dimRed;
 }
 
 function drawBatteryOutline(ctx, color = COLORS.white) {
@@ -237,7 +285,7 @@ function drawBattery(percent, deviceName) {
     ctx.fillStyle = COLORS.white;
     ctx.font = 'bold 28px sans-serif';
     ctx.textAlign = 'center';
-    ctx.fillText(`${percent}%`, CANVAS_SIZE / 2, 105);
+    ctx.fillText(`${percent}%`, CANVAS_SIZE / 2, 107);
 
     if (deviceName) {
         let displayName = deviceName;
@@ -326,7 +374,7 @@ function drawCharging(deviceName, batteryLevel) {
     ctx.fillStyle = COLORS.background;
     ctx.fillRect(0, 0, CANVAS_SIZE, CANVAS_SIZE);
 
-    drawBatteryOutline(ctx, COLORS.green);
+    drawBatteryOutline(ctx, COLORS.white);
 
     if (batteryLevel !== null && batteryLevel !== undefined) {
         const { x, y, width, height, padding } = BATTERY_ICON;
@@ -338,18 +386,23 @@ function drawCharging(deviceName, batteryLevel) {
         ctx.fillRect(x + padding, y + padding, fillWidth, innerHeight);
     }
 
+    // Charging icon with white outline
     const { x, y, width, height } = BATTERY_ICON;
-    ctx.fillStyle = COLORS.yellow;
     ctx.font = 'bold 24px sans-serif';
     ctx.textAlign = 'center';
+    ctx.strokeStyle = COLORS.white;
+    ctx.lineWidth = 3;
+    ctx.strokeText('\u26A1', x + width / 2, y + height / 2 + 8);
+    ctx.fillStyle = COLORS.yellow;
     ctx.fillText('\u26A1', x + width / 2, y + height / 2 + 8);
 
-    ctx.fillStyle = COLORS.green;
-    ctx.font = 'bold 24px sans-serif';
+    ctx.fillStyle = COLORS.white;
+    ctx.font = 'bold 28px sans-serif';
     if (batteryLevel !== null && batteryLevel !== undefined) {
-        ctx.fillText(`${batteryLevel}%`, CANVAS_SIZE / 2, 105);
+        ctx.fillText(`${batteryLevel}%`, CANVAS_SIZE / 2, 107);
     } else {
-        ctx.fillText('Charging', CANVAS_SIZE / 2, 105);
+        ctx.font = 'bold 24px sans-serif';
+        ctx.fillText('Charging', CANVAS_SIZE / 2, 107);
     }
 
     if (deviceName) {
@@ -360,6 +413,104 @@ function drawCharging(deviceName, batteryLevel) {
         ctx.fillStyle = COLORS.lightGray;
         ctx.font = '16px sans-serif';
         ctx.fillText(displayName, CANVAS_SIZE / 2, 130);
+    }
+
+    return canvas.toDataURL('image/png');
+}
+
+function drawSleeping(deviceName, batteryLevel) {
+    const canvas = createCanvas(CANVAS_SIZE, CANVAS_SIZE);
+    const ctx = canvas.getContext('2d');
+
+    ctx.fillStyle = COLORS.background;
+    ctx.fillRect(0, 0, CANVAS_SIZE, CANVAS_SIZE);
+
+    // Dimmed battery outline
+    drawBatteryOutline(ctx, COLORS.dimGray);
+
+    const { x, y, width, height, padding, cornerRadius } = BATTERY_ICON;
+
+    // Dimmed battery fill if we have a level
+    if (batteryLevel !== null && batteryLevel !== undefined) {
+        const dimColor = getDimBatteryColor(batteryLevel);
+        const fillWidth = (width - padding * 2) * (batteryLevel / 100);
+        if (fillWidth > 0) {
+            ctx.fillStyle = dimColor;
+            ctx.beginPath();
+            ctx.roundRect(x + padding, y + padding, fillWidth, height - padding * 2, Math.max(0, cornerRadius - padding));
+            ctx.fill();
+        }
+    }
+
+    // Zzz icon inside battery
+    ctx.fillStyle = COLORS.gray;
+    ctx.font = 'bold 18px sans-serif';
+    ctx.textAlign = 'center';
+    ctx.fillText('Zzz', x + width / 2, y + height / 2 + 6);
+
+    // Battery percentage (dimmed but visible)
+    ctx.fillStyle = COLORS.gray;
+    ctx.font = 'bold 24px sans-serif';
+    if (batteryLevel !== null && batteryLevel !== undefined) {
+        ctx.fillText(`${batteryLevel}%`, CANVAS_SIZE / 2, 107);
+    } else {
+        ctx.font = '18px sans-serif';
+        ctx.fillText('Sleep', CANVAS_SIZE / 2, 107);
+    }
+
+    // Device name (dimmed)
+    if (deviceName) {
+        let displayName = deviceName;
+        if (displayName.length > 16) {
+            displayName = displayName.substring(0, 15) + '...';
+        }
+        ctx.fillStyle = COLORS.darkGray;
+        ctx.font = '16px sans-serif';
+        ctx.fillText(displayName, CANVAS_SIZE / 2, 130);
+    }
+
+    return canvas.toDataURL('image/png');
+}
+
+function drawOffline(deviceName, cachedBattery) {
+    const canvas = createCanvas(CANVAS_SIZE, CANVAS_SIZE);
+    const ctx = canvas.getContext('2d');
+    const { x, y, width, height } = BATTERY_ICON;
+
+    ctx.fillStyle = COLORS.background;
+    ctx.fillRect(0, 0, CANVAS_SIZE, CANVAS_SIZE);
+
+    drawBatteryOutline(ctx, COLORS.dimGray);
+
+    // X mark inside battery
+    ctx.strokeStyle = COLORS.darkGray;
+    ctx.lineWidth = 3;
+    ctx.beginPath();
+    ctx.moveTo(x + 20, y + 10);
+    ctx.lineTo(x + width - 20, y + height - 10);
+    ctx.moveTo(x + width - 20, y + 10);
+    ctx.lineTo(x + 20, y + height - 10);
+    ctx.stroke();
+
+    // "Offline" text with optional cached battery
+    ctx.fillStyle = COLORS.gray;
+    ctx.font = '18px sans-serif';
+    ctx.textAlign = 'center';
+    if (cachedBattery !== null && cachedBattery !== undefined) {
+        ctx.fillText(`Offline (${cachedBattery}%)`, CANVAS_SIZE / 2, 107);
+    } else {
+        ctx.fillText('Offline', CANVAS_SIZE / 2, 107);
+    }
+
+    // Device name (dimmed)
+    if (deviceName) {
+        let displayName = deviceName;
+        if (displayName.length > 16) {
+            displayName = displayName.substring(0, 15) + '...';
+        }
+        ctx.fillStyle = COLORS.darkGray;
+        ctx.font = '16px sans-serif';
+        ctx.fillText(displayName, CANVAS_SIZE / 2, 125);
     }
 
     return canvas.toDataURL('image/png');
@@ -418,7 +569,7 @@ function drawCompactDevice(ctx, device, yOffset) {
         ctx.font = '20px sans-serif';
         ctx.textAlign = 'left';
         ctx.textBaseline = 'middle';
-        ctx.fillText('Offline', valueX, valueCenterY);
+        ctx.fillText('Offline', valueX, valueCenterY + 1);
 
         if (device && device.name) {
             let displayName = device.name;
@@ -434,6 +585,45 @@ function drawCompactDevice(ctx, device, yOffset) {
         return;
     }
 
+    // Sleeping state (Razer device in sleep mode)
+    if (device.sleeping) {
+        drawCompactBatteryOutline(ctx, batteryX, batteryY, COLORS.dimGray);
+
+        // Draw dimmed battery fill with appropriate color
+        if (device.battery !== null && device.battery !== undefined) {
+            const dimColor = getDimBatteryColor(device.battery);
+            drawCompactBatteryFill(ctx, batteryX, batteryY, device.battery, dimColor);
+        }
+
+        // Zzz icon
+        ctx.fillStyle = COLORS.gray;
+        ctx.font = 'bold 10px sans-serif';
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.fillText('Zzz', batteryX + battWidth / 2, valueCenterY);
+
+        // Show percentage in compact mode (dimmed)
+        ctx.textAlign = 'left';
+        ctx.fillStyle = COLORS.gray;
+        ctx.font = '20px sans-serif';
+        if (device.battery !== null && device.battery !== undefined) {
+            ctx.fillText(`${device.battery}%`, valueX, valueCenterY + 1);
+        } else {
+            ctx.fillText('Sleep', valueX, valueCenterY + 1);
+        }
+
+        let displayName = device.name;
+        ctx.font = '16px sans-serif';
+        while (ctx.measureText(displayName).width > CANVAS_SIZE - 16 && displayName.length > 3) {
+            displayName = displayName.substring(0, displayName.length - 4) + '...';
+        }
+        ctx.fillStyle = COLORS.darkGray;
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'alphabetic';
+        ctx.fillText(displayName, CANVAS_SIZE / 2, nameY);
+        return;
+    }
+
     if (device.error === 'not_supported' || device.error === 'timeout') {
         drawCompactBatteryOutline(ctx, batteryX, batteryY, COLORS.dimGray);
 
@@ -446,7 +636,7 @@ function drawCompactDevice(ctx, device, yOffset) {
         ctx.textAlign = 'left';
         ctx.fillStyle = COLORS.yellow;
         ctx.font = '20px sans-serif';
-        ctx.fillText('N/A', valueX, valueCenterY);
+        ctx.fillText('N/A', valueX, valueCenterY + 1);
 
         let displayName = device.name;
         ctx.font = '16px sans-serif';
@@ -461,26 +651,30 @@ function drawCompactDevice(ctx, device, yOffset) {
     }
 
     if (device.isCharging) {
-        drawCompactBatteryOutline(ctx, batteryX, batteryY, COLORS.green);
+        drawCompactBatteryOutline(ctx, batteryX, batteryY, COLORS.white);
 
         if (device.battery !== null && device.battery !== undefined) {
             drawCompactBatteryFill(ctx, batteryX, batteryY, device.battery, COLORS.green);
         }
 
-        ctx.fillStyle = COLORS.yellow;
+        // Charging icon with white outline
         ctx.font = 'bold 12px sans-serif';
         ctx.textAlign = 'center';
         ctx.textBaseline = 'middle';
+        ctx.strokeStyle = COLORS.white;
+        ctx.lineWidth = 2;
+        ctx.strokeText('\u26A1', batteryX + battWidth / 2, valueCenterY);
+        ctx.fillStyle = COLORS.yellow;
         ctx.fillText('\u26A1', batteryX + battWidth / 2, valueCenterY);
 
         ctx.textAlign = 'left';
-        ctx.fillStyle = COLORS.green;
+        ctx.fillStyle = COLORS.white;
         ctx.font = 'bold 24px sans-serif';
         if (device.battery !== null && device.battery !== undefined) {
-            ctx.fillText(`${device.battery}%`, valueX, valueCenterY);
+            ctx.fillText(`${device.battery}%`, valueX, valueCenterY + 1);
         } else {
             ctx.font = '16px sans-serif';
-            ctx.fillText('Charging', valueX, valueCenterY);
+            ctx.fillText('Charging', valueX, valueCenterY + 1);
         }
 
         let displayName = device.name;
@@ -504,7 +698,7 @@ function drawCompactDevice(ctx, device, yOffset) {
         ctx.font = 'bold 24px sans-serif';
         ctx.textAlign = 'left';
         ctx.textBaseline = 'middle';
-        ctx.fillText(`${device.battery}%`, valueX, valueCenterY);
+        ctx.fillText(`${device.battery}%`, valueX, valueCenterY + 1);
 
         let displayName = device.name;
         ctx.font = '16px sans-serif';
@@ -522,7 +716,7 @@ function drawCompactDevice(ctx, device, yOffset) {
         ctx.font = '20px sans-serif';
         ctx.textAlign = 'left';
         ctx.textBaseline = 'middle';
-        ctx.fillText('N/A', valueX, valueCenterY);
+        ctx.fillText('N/A', valueX, valueCenterY + 1);
 
         let displayName = device.name;
         ctx.font = '16px sans-serif';
@@ -562,7 +756,12 @@ function drawSingleDeviceButton(device) {
     }
 
     if (device.connected === false) {
-        return drawNoDevice(device.name || 'Disconnected');
+        // Show offline state with device name and cached battery
+        return drawOffline(device.name, device.battery);
+    }
+
+    if (device.sleeping) {
+        return drawSleeping(device.name, device.battery);
     }
 
     if (device.error === 'not_supported' || device.error === 'timeout') {
