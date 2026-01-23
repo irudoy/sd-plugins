@@ -121,12 +121,12 @@ Headers: X-API-KEY: <key>, Accept: application/json
 
 ### Type Definitions (types/)
 
-Типы для JSDoc-аннотаций в JavaScript-файлах:
+Types for JSDoc annotations in JavaScript files:
 
-- **streamdock.d.ts** — типы для plugin backend (WebSocket messages, settings, events)
-- **property-inspector.d.ts** — глобалы PI (`$settings`, `$websocket`, `$propEvent`, etc.)
+- **streamdock.d.ts** — types for plugin backend (WebSocket messages, settings, events)
+- **property-inspector.d.ts** — PI globals (`$settings`, `$websocket`, `$propEvent`, etc.)
 
-Используются через `@type` в JSDoc:
+Used via `@type` in JSDoc:
 ```javascript
 /** @type {StreamDockSettings} */
 const settings = data.settings || {};
@@ -184,7 +184,7 @@ Uses native helper (`plugin/devices/razer-battery-helper`) for HID communication
 
 ## Dynamic Images
 
-**SVG не работает!** StreamDock не поддерживает SVG. Используй node-canvas + PNG:
+**SVG does not work!** StreamDock does not support SVG. Use node-canvas + PNG:
 
 ```javascript
 const { createCanvas } = require('canvas');
@@ -199,7 +199,7 @@ function drawButton() {
 
 ## macOS APFS Disk Space
 
-`df` показывает неправильные значения для root. Использовать `/System/Volumes/Data`:
+`df` shows incorrect values for root. Use `/System/Volumes/Data`:
 
 ```javascript
 const dataPartition = disks.find(d => d.mountpoint === '/System/Volumes/Data');
@@ -212,17 +212,17 @@ if (dataPartition) {
 
 | Package | Purpose |
 |---------|---------|
-| ws | WebSocket для связи со StreamDock |
-| canvas | Генерация PNG изображений |
+| ws | WebSocket for StreamDock communication |
+| canvas | PNG image generation |
 
-**Note:** canvas требует native compilation.
+**Note:** canvas requires native compilation.
 
 ## Common Pitfalls
 
 1. **Plugin Not Starting** — `node --check plugin/index.js`
 2. **PI Not Receiving Data** — Check `currentPIContext` is set
-3. **setImage не работает** — Использовать PNG, не SVG
-4. **Razer not detected** — Нужен Input Monitoring permission
+3. **setImage not working** — Use PNG, not SVG
+4. **Razer not detected** — Requires Input Monitoring permission
 
 ## Reference
 
