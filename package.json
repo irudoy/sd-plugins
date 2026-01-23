@@ -2,10 +2,6 @@
   "name": "sd-plugins",
   "version": "1.0.0",
   "private": true,
-  "workspaces": [
-    "com.isrudoy.mactools.sdPlugin",
-    "com.isrudoy.unifi.sdPlugin"
-  ],
   "description": "StreamDock plugins for macOS",
   "scripts": {
     "lint": "eslint .",
