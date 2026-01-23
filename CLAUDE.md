@@ -21,8 +21,12 @@ sd-plugins/
 ├── tsconfig.json             # TypeScript for JSDoc type checking
 ├── .prettierrc.json          # 2 spaces, single quotes, semicolons
 ├── .editorconfig
+├── types/                    # TypeScript declarations
+│   ├── streamdock.d.ts       # Plugin backend types
+│   └── property-inspector.d.ts # PI globals ($settings, $websocket, etc.)
 ├── com.isrudoy.mactools.sdPlugin/
-│   ├── package.json          # Runtime dependencies only
+│   ├── package.json          # Runtime dependencies (ws, canvas)
+│   ├── package-lock.json
 │   ├── manifest.json
 │   ├── plugin/               # Node.js backend
 │   ├── driveinfo/            # Property Inspector
@@ -31,6 +35,7 @@ sd-plugins/
 │   └── static/               # SDK (not linted)
 └── com.isrudoy.unifi.sdPlugin/
     ├── package.json
+    ├── package-lock.json
     ├── manifest.json
     ├── plugin/
     ├── vpn/
@@ -42,6 +47,8 @@ sd-plugins/
 ### Setup
 ```bash
 npm install           # Install dev dependencies in root
+cd com.isrudoy.mactools.sdPlugin && npm install && cd ..
+cd com.isrudoy.unifi.sdPlugin && npm install && cd ..
 npm run link          # Symlink both plugins to StreamDock
 ```
 
@@ -111,6 +118,19 @@ Headers: X-API-KEY: <key>, Accept: application/json
 ```
 
 ## Critical Knowledge
+
+### Type Definitions (types/)
+
+Типы для JSDoc-аннотаций в JavaScript-файлах:
+
+- **streamdock.d.ts** — типы для plugin backend (WebSocket messages, settings, events)
+- **property-inspector.d.ts** — глобалы PI (`$settings`, `$websocket`, `$propEvent`, etc.)
+
+Используются через `@type` в JSDoc:
+```javascript
+/** @type {StreamDockSettings} */
+const settings = data.settings || {};
+```
 
 ### StreamDock vs Elgato SDK
 
