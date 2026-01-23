@@ -1,6 +1,7 @@
 /**
  * Unifi Network Plugin for StreamDock
  * VPN Status Action - Node.js implementation
+ * @module plugin/index
  */
 
 const { exec } = require('child_process');
@@ -10,11 +11,99 @@ const fs = require('fs');
 const path = require('path');
 const { createCanvas } = require('canvas');
 
-// Configuration
-const DEBUG = false; // Set to true for debug logging
+// ============================================================
+// Type Definitions
+// ============================================================
 
-// File-based logging
+/**
+ * @typedef {import('../../types/streamdock').StreamDockMessage} StreamDockMessage
+ * @typedef {import('../../types/streamdock').AppearPayload} AppearPayload
+ * @typedef {import('../../types/streamdock').KeyPayload} KeyPayload
+ * @typedef {import('../../types/streamdock').SettingsPayload} SettingsPayload
+ * @typedef {import('../../types/streamdock').SendToPluginPayload} SendToPluginPayload
+ */
+
+/**
+ * Unifi VPN settings
+ * @typedef {Object} UnifiSettings
+ * @property {string} [controllerUrl] - Unifi controller URL
+ * @property {string} [apiKey] - API key
+ * @property {string} [selectedVpn] - Selected VPN ID
+ * @property {number|string} [updateInterval] - Update interval in seconds
+ */
+
+/**
+ * VPN client from Unifi API
+ * @typedef {Object} VpnClient
+ * @property {string} id - VPN ID
+ * @property {string} name - VPN name
+ * @property {string} networkId - Network config ID
+ * @property {boolean} enabled - Whether VPN is enabled
+ */
+
+/**
+ * VPN connection status from Unifi API
+ * @typedef {Object} VpnConnection
+ * @property {string} [network_id] - Network ID
+ * @property {string} [networkId] - Alternative network ID field
+ * @property {string} [id] - Connection ID
+ * @property {string} [status] - Connection status (CONNECTED, CONNECTING, etc.)
+ * @property {boolean} [connected] - Connection state
+ * @property {string} [remote_ip] - Remote IP address
+ * @property {string} [ip] - Alternative IP field
+ * @property {string} [local_ip] - Local IP address
+ * @property {number} [assoc_time] - Connection start timestamp
+ * @property {number} [rx_rate_bps] - RX rate in bytes/second
+ * @property {number} [tx_rate_bps] - TX rate in bytes/second
+ * @property {number} [rx_bytes_r] - Alternative RX rate
+ * @property {number} [tx_bytes_r] - Alternative TX rate
+ * @property {number} [rx_rate] - Legacy RX rate field
+ * @property {number} [tx_rate] - Legacy TX rate field
+ */
+
+/**
+ * Unifi network config API response
+ * @typedef {Object} NetworkConfigResponse
+ * @property {Array<{_id: string, name?: string, purpose?: string, enabled?: boolean}>} [data]
+ */
+
+/**
+ * Unifi VPN connections API response
+ * @typedef {Object} VpnConnectionsResponse
+ * @property {VpnConnection[]} [connections]
+ * @property {VpnConnection[]} [data]
+ */
+
+/**
+ * Combined VPN info
+ * @typedef {Object} VpnInfo
+ * @property {VpnClient[]} vpns - List of VPN clients
+ * @property {VpnConnection[]} status - Connection statuses
+ * @property {string} [error] - Error message if any
+ */
+
+/**
+ * Context data
+ * @typedef {Object} ContextData
+ * @property {UnifiSettings} [settings] - Action settings
+ * @property {string} [action] - Action UUID
+ */
+
+// ============================================================
+// Configuration
+// ============================================================
+
+/** @type {boolean} */
+const DEBUG = false;
+
+/** @type {string} */
 const logFile = path.join(__dirname, 'plugin.log');
+
+/**
+ * Log messages to file (when DEBUG is true)
+ * @param {...unknown} args - Values to log
+ * @returns {void}
+ */
 function log(...args) {
   if (!DEBUG) return;
   const timestamp = new Date().toISOString();
@@ -26,21 +115,31 @@ function log(...args) {
   }
 }
 
+/** @type {import('ws').WebSocket|null} */
 let websocket = null;
 
-// Store for action contexts
+/** @type {Record<string, ContextData>} */
 const contexts = {};
+
+/** @type {Record<string, ReturnType<typeof setInterval>>} */
 const timers = {};
 
-// Current Property Inspector context (SDK pattern)
+/** @type {string|null} */
 let currentPIAction = null;
+
+/** @type {string|null} */
 let currentPIContext = null;
 
-// VPN status cache
+/** @type {Record<string, {vpn: VpnClient, status: VpnConnection | undefined, settings: UnifiSettings}>} */
 const vpnStatusCache = {};
 
 /**
  * Connect to StreamDock application
+ * @param {string} port - WebSocket port
+ * @param {string} uuid - Plugin UUID
+ * @param {string} registerEvent - Registration event
+ * @param {string} [_info] - Application info (unused)
+ * @returns {void}
  */
 function connectElgatoStreamDeckSocket(port, uuid, registerEvent, _info) {
   log('[Unifi] Starting with port:', port, 'uuid:', uuid);
@@ -49,6 +148,7 @@ function connectElgatoStreamDeckSocket(port, uuid, registerEvent, _info) {
 
   websocket.on('open', () => {
     log('[Unifi] WebSocket connected');
+    if (!websocket) return;
     websocket.send(
       JSON.stringify({
         event: registerEvent,
@@ -73,6 +173,8 @@ function connectElgatoStreamDeckSocket(port, uuid, registerEvent, _info) {
 
 /**
  * Handle incoming messages from StreamDock
+ * @param {StreamDockMessage} message - Incoming message
+ * @returns {void}
  */
 function handleMessage(message) {
   const { event, action, context, payload } = message;
@@ -111,6 +213,10 @@ function handleMessage(message) {
 
 /**
  * Make HTTPS request to Unifi API
+ * @param {string} controllerUrl - Controller URL
+ * @param {string} apiKey - API key
+ * @param {string} endpoint - API endpoint
+ * @returns {Promise<unknown>}
  */
 function unifiRequest(controllerUrl, apiKey, endpoint) {
   return new Promise((resolve, reject) => {
@@ -139,8 +245,9 @@ function unifiRequest(controllerUrl, apiKey, endpoint) {
         });
 
         res.on('end', () => {
-          log('[Unifi] Response status:', res.statusCode);
-          if (res.statusCode >= 200 && res.statusCode < 300) {
+          const statusCode = res.statusCode ?? 0;
+          log('[Unifi] Response status:', statusCode);
+          if (statusCode >= 200 && statusCode < 300) {
             try {
               const json = JSON.parse(data);
               resolve(json);
@@ -172,19 +279,20 @@ function unifiRequest(controllerUrl, apiKey, endpoint) {
 
 /**
  * Get list of VPN clients from Unifi controller
+ * @param {string} controllerUrl - Controller URL
+ * @param {string} apiKey - API key
+ * @returns {Promise<VpnClient[]>}
  */
 async function fetchVpnList(controllerUrl, apiKey) {
   try {
-    const response = await unifiRequest(
-      controllerUrl,
-      apiKey,
-      '/proxy/network/api/s/default/rest/networkconf'
+    const response = /** @type {NetworkConfigResponse} */ (
+      await unifiRequest(controllerUrl, apiKey, '/proxy/network/api/s/default/rest/networkconf')
     );
 
     log('[Unifi] Network config response:', JSON.stringify(response).substring(0, 500));
 
     // Filter VPN clients
-    const vpnClients = (response.data || response || [])
+    const vpnClients = (response.data || [])
       .filter((network) => network.purpose === 'vpn-client')
       .map((vpn) => ({
         id: vpn._id,
@@ -203,13 +311,18 @@ async function fetchVpnList(controllerUrl, apiKey) {
 
 /**
  * Get VPN connection status
+ * @param {string} controllerUrl - Controller URL
+ * @param {string} apiKey - API key
+ * @returns {Promise<VpnConnection[]>}
  */
 async function fetchVpnStatus(controllerUrl, apiKey) {
   try {
-    const response = await unifiRequest(
-      controllerUrl,
-      apiKey,
-      '/proxy/network/v2/api/site/default/vpn/connections'
+    const response = /** @type {VpnConnectionsResponse} */ (
+      await unifiRequest(
+        controllerUrl,
+        apiKey,
+        '/proxy/network/v2/api/site/default/vpn/connections'
+      )
     );
 
     log('[Unifi] VPN status response:', JSON.stringify(response).substring(0, 500));
@@ -224,6 +337,8 @@ async function fetchVpnStatus(controllerUrl, apiKey) {
 
 /**
  * Get combined VPN info (list + status)
+ * @param {UnifiSettings} settings - Plugin settings
+ * @returns {Promise<VpnInfo>}
  */
 async function getVpnInfo(settings) {
   const { controllerUrl, apiKey } = settings;
@@ -247,6 +362,9 @@ async function getVpnInfo(settings) {
 
 /**
  * Find VPN status by network ID
+ * @param {VpnConnection[]} statusList - List of VPN statuses
+ * @param {string} networkId - Network ID to find
+ * @returns {VpnConnection|undefined}
  */
 function findVpnStatus(statusList, networkId) {
   return statusList.find(
@@ -256,6 +374,8 @@ function findVpnStatus(statusList, networkId) {
 
 /**
  * Format bytes to human readable
+ * @param {number} bytes - Bytes per second
+ * @returns {string}
  */
 function formatBytes(bytes) {
   if (bytes < 1024) return bytes + ' B/s';
@@ -265,6 +385,8 @@ function formatBytes(bytes) {
 
 /**
  * Format uptime from timestamp
+ * @param {number|undefined} assocTime - Association timestamp
+ * @returns {string}
  */
 function formatUptime(assocTime) {
   if (!assocTime) return '';
@@ -285,6 +407,9 @@ function formatUptime(assocTime) {
 
 /**
  * Draw VPN button - Connected state
+ * @param {string} vpnName - VPN name
+ * @param {VpnConnection} [status] - Connection status
+ * @returns {string} Base64 PNG data URL
  */
 function drawConnected(vpnName, status) {
   const canvas = createCanvas(144, 144);
@@ -338,6 +463,7 @@ function drawConnected(vpnName, status) {
 
 /**
  * Draw VPN button - Connecting state
+ * @param {string} vpnName
  */
 function drawConnecting(vpnName) {
   const canvas = createCanvas(144, 144);
@@ -371,6 +497,7 @@ function drawConnecting(vpnName) {
 
 /**
  * Draw VPN button - Disconnected state
+ * @param {string} vpnName
  */
 function drawDisconnected(vpnName) {
   const canvas = createCanvas(144, 144);
@@ -404,6 +531,7 @@ function drawDisconnected(vpnName) {
 
 /**
  * Draw VPN button - Error state
+ * @param {string} message
  */
 function drawError(message) {
   const canvas = createCanvas(144, 144);
@@ -477,6 +605,8 @@ function drawNotConfigured() {
 
 /**
  * Update button for a context
+ * @param {string} context
+ * @param {UnifiSettings} settings
  */
 async function updateButton(context, settings = {}) {
   const { controllerUrl, apiKey, selectedVpn } = settings;
@@ -542,11 +672,13 @@ async function updateButton(context, settings = {}) {
 
 /**
  * Start update timer for a context
+ * @param {string} context
+ * @param {UnifiSettings} settings
  */
 function startTimer(context, settings = {}) {
   stopTimer(context);
 
-  const updateInterval = parseInt(settings.updateInterval) || 10;
+  const updateInterval = parseInt(String(settings.updateInterval)) || 10;
   const interval = updateInterval * 1000;
 
   // Initial update
@@ -560,6 +692,7 @@ function startTimer(context, settings = {}) {
 
 /**
  * Stop update timer for a context
+ * @param {string} context
  */
 function stopTimer(context) {
   if (timers[context]) {
@@ -570,6 +703,9 @@ function stopTimer(context) {
 
 /**
  * Event: Action appeared on the Stream Deck
+ * @param {string} action
+ * @param {string} context
+ * @param {AppearPayload} payload
  */
 function onWillAppear(action, context, payload) {
   const settings = payload?.settings || {};
@@ -579,6 +715,9 @@ function onWillAppear(action, context, payload) {
 
 /**
  * Event: Action disappeared from the Stream Deck
+ * @param {string} _action
+ * @param {string} context
+ * @param {AppearPayload} _payload
  */
 function onWillDisappear(_action, context, _payload) {
   stopTimer(context);
@@ -588,6 +727,9 @@ function onWillDisappear(_action, context, _payload) {
 
 /**
  * Event: Key pressed
+ * @param {string} _action
+ * @param {string} _context
+ * @param {KeyPayload} _payload
  */
 function onKeyDown(_action, _context, _payload) {
   // No action on key down
@@ -595,6 +737,9 @@ function onKeyDown(_action, _context, _payload) {
 
 /**
  * Event: Key released - Open VPN settings in browser
+ * @param {string} action
+ * @param {string} context
+ * @param {KeyPayload} payload
  */
 function onKeyUp(action, context, payload) {
   const settings = payload?.settings || contexts[context]?.settings || {};
@@ -621,6 +766,9 @@ function onKeyUp(action, context, payload) {
 
 /**
  * Event: Message from Property Inspector
+ * @param {string} action
+ * @param {string} context
+ * @param {SendToPluginPayload} payload
  */
 async function onSendToPlugin(action, context, payload) {
   // Store action if not already stored
@@ -642,12 +790,16 @@ async function onSendToPlugin(action, context, payload) {
 
   if (payload && payload.event === 'testConnection') {
     // Test connection with provided credentials
-    await testConnection(payload.controllerUrl, payload.apiKey);
+    await testConnection(
+      /** @type {string} */ (payload.controllerUrl),
+      /** @type {string} */ (payload.apiKey)
+    );
     return;
   }
 
   // Settings update
-  const settings = payload;
+  /** @type {UnifiSettings} */
+  const settings = /** @type {UnifiSettings} */ (payload);
   if (contexts[context]) {
     contexts[context].settings = settings;
   } else {
@@ -660,6 +812,7 @@ async function onSendToPlugin(action, context, payload) {
 
 /**
  * Send VPN list to Property Inspector
+ * @param {UnifiSettings} settings
  */
 async function sendVpnList(settings) {
   try {
@@ -687,6 +840,8 @@ async function sendVpnList(settings) {
 
 /**
  * Test connection from Property Inspector
+ * @param {string} controllerUrl
+ * @param {string} apiKey
  */
 async function testConnection(controllerUrl, apiKey) {
   try {
@@ -708,6 +863,9 @@ async function testConnection(controllerUrl, apiKey) {
 
 /**
  * Event: Property Inspector appeared
+ * @param {string} action
+ * @param {string} context
+ * @param {Record<string, unknown>} _payload
  */
 async function onPropertyInspectorDidAppear(action, context, _payload) {
   currentPIAction = action;
@@ -728,6 +886,9 @@ async function onPropertyInspectorDidAppear(action, context, _payload) {
 
 /**
  * Event: Settings received
+ * @param {string} action
+ * @param {string} context
+ * @param {SettingsPayload} payload
  */
 function onDidReceiveSettings(action, context, payload) {
   const settings = payload?.settings || {};
@@ -746,6 +907,8 @@ function onDidReceiveSettings(action, context, payload) {
 
 /**
  * Send setImage to StreamDock
+ * @param {string} context
+ * @param {string} imageData
  */
 function setImage(context, imageData) {
   if (!imageData) {
@@ -768,6 +931,7 @@ function setImage(context, imageData) {
 
 /**
  * Send to Property Inspector (SDK pattern)
+ * @param {Record<string, unknown>} payload
  */
 function sendToPropertyInspector(payload) {
   if (!currentPIContext || !currentPIAction) {

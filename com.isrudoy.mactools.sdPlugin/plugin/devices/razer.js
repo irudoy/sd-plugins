@@ -2,6 +2,7 @@
  * Razer battery detection for Mac Tools Plugin
  *
  * Uses native IOKit helper - no node-hid dependency, no mouse blocking.
+ * @module devices/razer
  */
 
 const { log } = require('../lib/common');
@@ -10,27 +11,87 @@ const path = require('path');
 const fs = require('fs');
 
 // ============================================================
+// Type Definitions
+// ============================================================
+
+/**
+ * Razer device configuration
+ * @typedef {Object} RazerDeviceConfig
+ * @property {number[]} pids - USB Product IDs
+ * @property {number} transactionId - HID transaction ID
+ */
+
+/**
+ * Razer device info from enumeration
+ * @typedef {Object} RazerDeviceInfo
+ * @property {string} name - Device name
+ * @property {number} pid - USB Product ID
+ * @property {number} transactionId - HID transaction ID
+ * @property {string} path - HID device path
+ * @property {boolean} [isWired] - Whether device is wired
+ */
+
+/**
+ * Razer battery query result
+ * @typedef {Object} RazerBatteryResult
+ * @property {number|null} battery - Battery percentage or null
+ * @property {boolean} isCharging - Whether device is charging
+ * @property {string|null} [error] - Error code if any
+ * @property {boolean} [sleeping] - Whether device is in sleep mode
+ */
+
+/**
+ * Cached battery entry
+ * @typedef {Object} RazerCacheEntry
+ * @property {number} battery - Battery percentage
+ * @property {string} deviceName - Device name
+ * @property {number} timestamp - Cache timestamp
+ */
+
+/**
+ * Helper enumeration result
+ * @typedef {Object} HelperEnumerateResult
+ * @property {Array<{name: string, pid: number, path: string, isWired?: boolean}>} [devices]
+ */
+
+/**
+ * Helper battery result
+ * @typedef {Object} HelperBatteryResult
+ * @property {number|null} [battery]
+ * @property {boolean} [charging]
+ * @property {boolean} [sleeping]
+ * @property {string} [error]
+ */
+
+// ============================================================
 // Constants
 // ============================================================
 
+/** @type {number} */
 const RAZER_VID = 0x1532;
+
+/** @type {Record<string, RazerDeviceConfig>} */
 const RAZER_DEVICES = {
   'Viper V3 Pro': { pids: [0x00c0, 0x00c1], transactionId: 0x1f },
 };
 
-// Path to native helper
+/** @type {string} */
 const HELPER_PATH = path.join(__dirname, 'razer-battery-helper');
 
-// Battery cache
+/** @type {Map<string, RazerCacheEntry>} */
 const batteryCache = new Map();
 
-// Helper availability
+/** @type {boolean|null} */
 let helperAvailable = null;
 
 // ============================================================
 // Helper Functions
 // ============================================================
 
+/**
+ * Check if native helper is available
+ * @returns {boolean}
+ */
 function isHelperAvailable() {
   if (helperAvailable !== null) return helperAvailable;
 
@@ -47,6 +108,11 @@ function isHelperAvailable() {
   return helperAvailable;
 }
 
+/**
+ * Call native helper with arguments
+ * @param {string} args - Command line arguments
+ * @returns {Promise<unknown>}
+ */
 function callHelper(args) {
   return new Promise((resolve, reject) => {
     exec(`"${HELPER_PATH}" ${args}`, { timeout: 5000 }, (error, stdout, _stderr) => {
@@ -68,8 +134,15 @@ function callHelper(args) {
 // Mutex (prevents race conditions with multiple widgets)
 // ============================================================
 
+/** @type {Promise<void>} */
 let queryLock = Promise.resolve();
 
+/**
+ * Execute function with mutex lock
+ * @template T
+ * @param {() => Promise<T>} fn - Function to execute
+ * @returns {Promise<T>}
+ */
 async function withLock(fn) {
   const unlock = queryLock;
   /** @type {() => void} */
@@ -89,10 +162,18 @@ async function withLock(fn) {
 // Main Functions
 // ============================================================
 
+/**
+ * Check if HID access is available
+ * @returns {boolean}
+ */
 function isHIDAvailable() {
   return isHelperAvailable();
 }
 
+/**
+ * Get list of connected Razer devices
+ * @returns {Promise<RazerDeviceInfo[]>}
+ */
 async function getRazerDevices() {
   if (!isHelperAvailable()) {
     log('[Razer] Helper not available');
@@ -100,7 +181,7 @@ async function getRazerDevices() {
   }
 
   try {
-    const result = await callHelper('--enumerate');
+    const result = /** @type {HelperEnumerateResult} */ (await callHelper('--enumerate'));
     return (result.devices || []).map((d) => ({
       name: d.name,
       pid: d.pid,
@@ -114,6 +195,11 @@ async function getRazerDevices() {
   }
 }
 
+/**
+ * Get battery level for Razer device
+ * @param {RazerDeviceInfo} deviceInfo - Device info
+ * @returns {Promise<RazerBatteryResult>}
+ */
 async function getRazerBattery(deviceInfo) {
   if (!isHelperAvailable()) {
     return { battery: null, isCharging: false, error: 'helper_not_available' };
@@ -121,7 +207,9 @@ async function getRazerBattery(deviceInfo) {
 
   return withLock(async () => {
     try {
-      const result = await callHelper(`--path "${deviceInfo.path}"`);
+      const result = /** @type {HelperBatteryResult} */ (
+        await callHelper(`--path "${deviceInfo.path}"`)
+      );
 
       // Handle sleeping state with cache
       if (result.sleeping) {
@@ -143,7 +231,7 @@ async function getRazerBattery(deviceInfo) {
       }
 
       // Cache successful reading
-      if (result.battery !== null) {
+      if (result.battery != null) {
         batteryCache.set(deviceInfo.path, {
           battery: result.battery,
           deviceName: deviceInfo.name,
@@ -152,7 +240,7 @@ async function getRazerBattery(deviceInfo) {
       }
 
       return {
-        battery: result.battery,
+        battery: result.battery ?? null,
         isCharging: result.charging || false,
         error: null,
       };
@@ -167,8 +255,14 @@ async function getRazerBattery(deviceInfo) {
 // Cache Functions
 // ============================================================
 
+/** @type {number} */
 const CACHE_MAX_AGE = 60 * 60 * 1000; // 1 hour
 
+/**
+ * Get cached battery for Razer device
+ * @param {string|null} [deviceName] - Device name to match
+ * @returns {RazerCacheEntry|null}
+ */
 function getCachedRazerBattery(deviceName) {
   const now = Date.now();
   for (const [path, cached] of batteryCache.entries()) {

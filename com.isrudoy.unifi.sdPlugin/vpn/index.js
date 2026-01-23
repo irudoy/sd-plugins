@@ -1,6 +1,24 @@
 /**
  * VPN Status - Property Inspector
  * Using StreamDock SDK pattern
+ * @module vpn/index
+ */
+
+// Make this file a module to avoid global scope conflicts
+export {};
+
+/**
+ * @typedef {Object} VpnPIClient
+ * @property {string} id
+ * @property {string} name
+ */
+
+/**
+ * @typedef {Object} VpnPISettings
+ * @property {string} [controllerUrl]
+ * @property {string} [apiKey]
+ * @property {string} [selectedVpn]
+ * @property {number|string} [updateInterval]
  */
 
 // SDK configuration
@@ -20,6 +38,7 @@ const $dom = {
 };
 
 // VPN list storage
+/** @type {VpnPIClient[]} */
 let vpnList = [];
 
 /**
@@ -28,6 +47,7 @@ let vpnList = [];
 const $propEvent = {
   /**
    * Called when settings are received from StreamDock
+   * @param {{settings: VpnPISettings}} data
    */
   didReceiveSettings(data) {
     const settings = data.settings || {};
@@ -35,12 +55,13 @@ const $propEvent = {
 
     // If we have credentials, request VPN list
     if (settings.controllerUrl && settings.apiKey) {
-      $websocket.sendToPlugin({ event: 'getVpnList' });
+      $websocket?.sendToPlugin({ event: 'getVpnList' });
     }
   },
 
   /**
    * Called when plugin sends data to PI
+   * @param {{event?: string, vpns?: VpnPIClient[], success?: boolean, error?: string, message?: string, settings?: VpnPISettings}} data
    */
   sendToPropertyInspector(data) {
     if (!data) return;
@@ -73,7 +94,10 @@ const $propEvent = {
     }
   },
 
-  didReceiveGlobalSettings(data) {
+  /**
+   * @param {Record<string, unknown>} _data
+   */
+  didReceiveGlobalSettings(_data) {
     // Global settings received
   },
 };
@@ -108,12 +132,13 @@ function populateVpnList() {
   if (currentValue && vpnList.some((v) => v.id === currentValue)) {
     select.value = currentValue;
   } else if (typeof $settings !== 'undefined' && $settings && $settings.selectedVpn) {
-    select.value = $settings.selectedVpn;
+    select.value = /** @type {string} */ ($settings.selectedVpn);
   }
 }
 
 /**
  * Load settings into UI
+ * @param {VpnPISettings} settings
  */
 function loadSettings(settings) {
   if (settings.controllerUrl !== undefined && $dom.controllerUrl) {
@@ -129,7 +154,7 @@ function loadSettings(settings) {
   }
 
   if (settings.updateInterval !== undefined && $dom.updateInterval) {
-    $dom.updateInterval.value = settings.updateInterval;
+    $dom.updateInterval.value = String(settings.updateInterval);
     updateIntervalLabel();
   }
 }
@@ -214,6 +239,8 @@ function refreshVpnList() {
 
 /**
  * Show status message
+ * @param {string} message
+ * @param {string} type
  */
 function showStatus(message, type) {
   if (!$dom.statusMessage) return;
@@ -264,6 +291,7 @@ function updateIntervalLabel() {
 
 /**
  * Set update interval from clickable spans
+ * @param {string} value
  */
 function setUpdateInterval(value) {
   if ($dom.updateInterval) {

@@ -1,6 +1,31 @@
 /**
  * Drive Info - Property Inspector
  * Using StreamDock SDK pattern
+ * @module driveinfo/index
+ */
+
+// Make this file a module to avoid global scope conflicts
+export {};
+
+/**
+ * @typedef {Object} DrivePIDisk
+ * @property {string} name
+ * @property {string} displayName
+ * @property {string} mountpoint
+ */
+
+/**
+ * @typedef {Object} DrivePISettings
+ * @property {string} [displayMode]
+ * @property {string} [selectedDrive]
+ * @property {number|string} [rotationSpeed]
+ * @property {number|string} [updateInterval]
+ * @property {string} [lowColor]
+ * @property {number|string} [lowThreshold]
+ * @property {string} [criticalColor]
+ * @property {number|string} [criticalThreshold]
+ * @property {boolean} [showLabel]
+ * @property {boolean} [invertBar]
  */
 
 // SDK configuration
@@ -27,6 +52,7 @@ const $dom = {
 };
 
 // Disk list storage
+/** @type {DrivePIDisk[]} */
 let diskList = [];
 
 /**
@@ -35,15 +61,17 @@ let diskList = [];
 const $propEvent = {
   /**
    * Called when settings are received from StreamDock
+   * @param {{settings: DrivePISettings}} data
    */
   didReceiveSettings(data) {
     const settings = data.settings || {};
     loadSettings(settings);
-    $websocket.sendToPlugin({ event: 'getDisks' });
+    $websocket?.sendToPlugin({ event: 'getDisks' });
   },
 
   /**
    * Called when plugin sends data to PI
+   * @param {{event?: string, disks?: DrivePIDisk[], settings?: DrivePISettings}} data
    */
   sendToPropertyInspector(data) {
     if (data && data.event === 'diskList') {
@@ -55,7 +83,10 @@ const $propEvent = {
     }
   },
 
-  didReceiveGlobalSettings(data) {
+  /**
+   * @param {Record<string, unknown>} _data
+   */
+  didReceiveGlobalSettings(_data) {
     // Global settings received
   },
 };
@@ -89,12 +120,13 @@ function populateDriveList() {
   if (currentValue && diskList.some((d) => d.name === currentValue)) {
     select.value = currentValue;
   } else if (typeof $settings !== 'undefined' && $settings && $settings.selectedDrive) {
-    select.value = $settings.selectedDrive;
+    select.value = /** @type {string} */ ($settings.selectedDrive);
   }
 }
 
 /**
  * Load settings into UI
+ * @param {DrivePISettings} settings
  */
 function loadSettings(settings) {
   // Display mode
@@ -110,13 +142,13 @@ function loadSettings(settings) {
 
   // Rotation speed
   if (settings.rotationSpeed !== undefined && $dom.rotationSpeed) {
-    $dom.rotationSpeed.value = settings.rotationSpeed;
+    $dom.rotationSpeed.value = String(settings.rotationSpeed);
     updateRotationLabel();
   }
 
   // Update interval
   if (settings.updateInterval !== undefined && $dom.updateInterval) {
-    $dom.updateInterval.value = settings.updateInterval;
+    $dom.updateInterval.value = String(settings.updateInterval);
     updateIntervalLabel();
   }
 
@@ -125,13 +157,13 @@ function loadSettings(settings) {
     $dom.lowColor.value = settings.lowColor;
   }
   if (settings.lowThreshold !== undefined && $dom.lowThreshold) {
-    $dom.lowThreshold.value = settings.lowThreshold;
+    $dom.lowThreshold.value = String(settings.lowThreshold);
   }
   if (settings.criticalColor !== undefined && $dom.criticalColor) {
     $dom.criticalColor.value = settings.criticalColor;
   }
   if (settings.criticalThreshold !== undefined && $dom.criticalThreshold) {
-    $dom.criticalThreshold.value = settings.criticalThreshold;
+    $dom.criticalThreshold.value = String(settings.criticalThreshold);
   }
 
   // Checkboxes
@@ -212,6 +244,7 @@ function updateRotationLabel() {
 
 /**
  * Set rotation speed from clickable spans
+ * @param {string} value
  */
 function setRotationSpeed(value) {
   if ($dom.rotationSpeed) {
@@ -233,6 +266,7 @@ function updateIntervalLabel() {
 
 /**
  * Set update interval from clickable spans
+ * @param {string} value
  */
 function setUpdateInterval(value) {
   if ($dom.updateInterval) {

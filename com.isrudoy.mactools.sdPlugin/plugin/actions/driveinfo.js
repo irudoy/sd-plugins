@@ -1,5 +1,6 @@
 /**
  * Drive Info action for Mac Tools Plugin
+ * @module actions/driveinfo
  */
 
 const { execSync, exec } = require('child_process');
@@ -9,9 +10,52 @@ const { contexts, stopTimer, setTimer, setContext } = require('../lib/state');
 const { setImage, setTitle, sendToPropertyInspector } = require('../lib/websocket');
 
 // ============================================================
+// Type Definitions
+// ============================================================
+
+/**
+ * @typedef {import('../../../types/streamdock').AppearPayload<DriveInfoSettings>} AppearPayloadDrive
+ * @typedef {import('../../../types/streamdock').KeyPayload<DriveInfoSettings>} KeyPayloadDrive
+ * @typedef {import('../../../types/streamdock').SettingsPayload<DriveInfoSettings>} SettingsPayloadDrive
+ * @typedef {import('../../../types/streamdock').SendToPluginPayload} SendToPluginPayload
+ */
+
+/**
+ * Drive Info settings
+ * @typedef {Object} DriveInfoSettings
+ * @property {'0'|'1'} [displayMode] - '0' for single, '1' for rotation
+ * @property {string} [selectedDrive] - Drive name or mountpoint
+ * @property {number|string} [rotationSpeed] - Seconds between drives
+ * @property {number|string} [updateInterval] - Seconds between updates
+ * @property {string} [lowColor] - Hex color for low threshold
+ * @property {number|string} [lowThreshold] - Low percentage threshold
+ * @property {string} [criticalColor] - Hex color for critical threshold
+ * @property {number|string} [criticalThreshold] - Critical percentage threshold
+ * @property {boolean} [showLabel] - Show drive name
+ * @property {boolean} [invertBar] - Invert progress bar
+ */
+
+/**
+ * Disk information
+ * @typedef {Object} DiskInfo
+ * @property {string} device - Device path (/dev/diskX)
+ * @property {number} total - Total bytes
+ * @property {number} used - Used bytes
+ * @property {number} free - Free bytes
+ * @property {number} percent - Used percentage
+ * @property {string} mountpoint - Mount path
+ * @property {string} name - Display name
+ * @property {string} displayName - Full display name with mountpoint
+ */
+
+// ============================================================
 // Disk Information
 // ============================================================
 
+/**
+ * Get information about all mounted disks
+ * @returns {DiskInfo[]}
+ */
 function getDiskInfo() {
   try {
     const output = execSync('df -Pk', { encoding: 'utf8' });
@@ -71,12 +115,18 @@ function getDiskInfo() {
 // Drawing Functions
 // ============================================================
 
+/**
+ * Draw drive info button
+ * @param {DiskInfo} diskInfo - Disk information
+ * @param {DriveInfoSettings} [settings] - Display settings
+ * @returns {string|null} Base64 PNG data URL
+ */
 function drawDriveButton(diskInfo, settings = {}) {
   try {
     const showLabel = settings.showLabel !== false;
     const invertBar = settings.invertBar === true;
-    const lowThreshold = parseInt(settings.lowThreshold) || 20;
-    const criticalThreshold = parseInt(settings.criticalThreshold) || 10;
+    const lowThreshold = parseInt(String(settings.lowThreshold)) || 20;
+    const criticalThreshold = parseInt(String(settings.criticalThreshold)) || 10;
     const lowColor = settings.lowColor || '#FFFF00';
     const criticalColor = settings.criticalColor || '#FF0000';
 
@@ -143,6 +193,11 @@ function drawDriveButton(diskInfo, settings = {}) {
   }
 }
 
+/**
+ * Draw "Not Available" state
+ * @param {string} [diskName] - Disk name
+ * @returns {string|null} Base64 PNG data URL
+ */
 function drawDriveNotAvailable(diskName) {
   try {
     const canvas = createCanvas(CANVAS_SIZE, CANVAS_SIZE);
@@ -181,6 +236,12 @@ function drawDriveNotAvailable(diskName) {
 // Update Functions
 // ============================================================
 
+/**
+ * Update drive button display
+ * @param {string} context - Action context
+ * @param {DriveInfoSettings} [settings] - Display settings
+ * @returns {void}
+ */
 function updateDriveButton(context, settings = {}) {
   const disks = getDiskInfo();
 
@@ -193,6 +254,7 @@ function updateDriveButton(context, settings = {}) {
   const displayMode = settings.displayMode || '0';
   const selectedDrive = settings.selectedDrive;
 
+  /** @type {DiskInfo|undefined} */
   let diskToShow;
 
   if (displayMode === '1') {
@@ -223,12 +285,18 @@ function updateDriveButton(context, settings = {}) {
 // Timer Functions
 // ============================================================
 
+/**
+ * Start drive update timer
+ * @param {string} context - Action context
+ * @param {DriveInfoSettings} [settings] - Display settings
+ * @returns {void}
+ */
 function startDriveTimer(context, settings = {}) {
   stopTimer(context);
 
   const displayMode = settings.displayMode || '0';
-  const rotationSpeed = parseInt(settings.rotationSpeed) || 5;
-  const updateInterval = parseInt(settings.updateInterval) || 5;
+  const rotationSpeed = parseInt(String(settings.rotationSpeed)) || 5;
+  const updateInterval = parseInt(String(settings.updateInterval)) || 5;
   const interval = displayMode === '1' ? rotationSpeed * 1000 : updateInterval * 1000;
 
   const timer = setInterval(() => {
@@ -243,6 +311,12 @@ function startDriveTimer(context, settings = {}) {
 // Event Handlers
 // ============================================================
 
+/**
+ * Handle action appearing
+ * @param {string} context - Action context
+ * @param {AppearPayloadDrive} payload - Event payload
+ * @returns {void}
+ */
 function onWillAppear(context, payload) {
   const settings = payload?.settings || {};
   setContext(context, { settings, action: DRIVEINFO_ACTION });
@@ -251,10 +325,21 @@ function onWillAppear(context, payload) {
   startDriveTimer(context, settings);
 }
 
+/**
+ * Handle action disappearing
+ * @param {string} context - Action context
+ * @returns {void}
+ */
 function onWillDisappear(context) {
   stopTimer(context);
 }
 
+/**
+ * Handle key release
+ * @param {string} context - Action context
+ * @param {KeyPayloadDrive} payload - Event payload
+ * @returns {void}
+ */
 function onKeyUp(context, payload) {
   const settings = payload?.settings || contexts[context]?.settings || {};
   const selectedDrive = settings.selectedDrive;
@@ -271,6 +356,12 @@ function onKeyUp(context, payload) {
   }
 }
 
+/**
+ * Handle data from Property Inspector
+ * @param {string} context - Action context
+ * @param {SendToPluginPayload} payload - PI payload
+ * @returns {boolean}
+ */
 function onSendToPlugin(context, payload) {
   if (payload && payload.event === 'getDisks') {
     const disks = getDiskInfo();
@@ -287,6 +378,11 @@ function onSendToPlugin(context, payload) {
   return false;
 }
 
+/**
+ * Handle Property Inspector appearing
+ * @param {string} _context - Action context
+ * @returns {void}
+ */
 function onPropertyInspectorDidAppear(_context) {
   const disks = getDiskInfo();
   sendToPropertyInspector({
@@ -299,6 +395,12 @@ function onPropertyInspectorDidAppear(_context) {
   });
 }
 
+/**
+ * Handle settings update
+ * @param {string} context - Action context
+ * @param {DriveInfoSettings} settings - New settings
+ * @returns {void}
+ */
 function onSettingsUpdate(context, settings) {
   if (contexts[context]) {
     contexts[context].settings = settings;
@@ -310,6 +412,12 @@ function onSettingsUpdate(context, settings) {
   startDriveTimer(context, settings);
 }
 
+/**
+ * Handle settings received
+ * @param {string} context - Action context
+ * @param {SettingsPayloadDrive} payload - Settings payload
+ * @returns {void}
+ */
 function onDidReceiveSettings(context, payload) {
   onSettingsUpdate(context, payload?.settings || {});
 }

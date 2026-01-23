@@ -1,13 +1,57 @@
 /**
  * Apple Bluetooth battery detection for Mac Tools Plugin
+ * @module devices/apple
  */
 
 const { exec } = require('child_process');
 
 // ============================================================
+// Type Definitions
+// ============================================================
+
+/**
+ * Apple Bluetooth device
+ * @typedef {Object} AppleDevice
+ * @property {string} name - Device name
+ * @property {number} battery - Battery percentage (0-100)
+ * @property {boolean} isCharging - Whether device is charging
+ * @property {string} [address] - Bluetooth address (lowercase, with dashes)
+ */
+
+/**
+ * @callback AppleDevicesCallback
+ * @param {Error|null} error - Error if any
+ * @param {AppleDevice[]} devices - List of devices
+ * @returns {void}
+ */
+
+/**
+ * @callback AppleBatteryCallback
+ * @param {Error|null} error - Error if any
+ * @param {AppleDevice|null} device - Device or null
+ * @returns {void}
+ */
+
+/**
+ * Internal device state during parsing
+ * @typedef {Object} ParsedDevice
+ * @property {string|null} name
+ * @property {number|undefined} battery
+ * @property {string|null} address
+ * @property {boolean} isCharging
+ */
+
+// ============================================================
 // Helper Functions
 // ============================================================
 
+/**
+ * Finalize parsed device into AppleDevice
+ * @param {ParsedDevice} device - Parsed device
+ * @param {Record<string, string>} deviceNames - Address to name mapping
+ * @param {{deviceIndex: number}} counter - Counter for unnamed devices
+ * @returns {AppleDevice|null}
+ */
 function finalizeAppleDevice(device, deviceNames, counter) {
   if (device.battery === undefined) {
     return null;
@@ -33,14 +77,23 @@ function finalizeAppleDevice(device, deviceNames, counter) {
 // Main Functions
 // ============================================================
 
+/**
+ * Get all connected Apple Bluetooth devices with battery
+ * @param {AppleDevicesCallback} callback - Callback with devices
+ * @returns {void}
+ */
 function getAppleDevices(callback) {
   exec('system_profiler SPBluetoothDataType 2>/dev/null', (profilerError, profilerOutput) => {
+    /** @type {Record<string, string>} */
     const deviceNames = {};
 
     if (!profilerError && profilerOutput) {
+      /** @type {string[]} */
       const lines = profilerOutput.split('\n');
+      /** @type {string|null} */
       let currentName = null;
       for (const line of lines) {
+        /** @type {RegExpMatchArray|null} */
         const nameMatch = line.match(/^\s{10,14}([^:]+):\s*$/);
         if (nameMatch) {
           currentName = nameMatch[1].trim();
@@ -62,8 +115,11 @@ function getAppleDevices(callback) {
         return;
       }
 
+      /** @type {AppleDevice[]} */
       const devices = [];
+      /** @type {string[]} */
       const lines = stdout.trim().split('\n');
+      /** @type {ParsedDevice} */
       let currentDevice = {
         name: null,
         battery: undefined,
@@ -112,6 +168,12 @@ function getAppleDevices(callback) {
   });
 }
 
+/**
+ * Get battery for specific Apple device
+ * @param {string|null} deviceName - Device name to find (null for first device)
+ * @param {AppleBatteryCallback} callback - Callback with device
+ * @returns {void}
+ */
 function getAppleBattery(deviceName, callback) {
   getAppleDevices((error, devices) => {
     if (error) {

@@ -2,6 +2,29 @@
  * Battery Monitor - Property Inspector
  * Unified PI for Apple Bluetooth and Razer devices
  * Using StreamDock SDK pattern
+ * @module battery/index
+ */
+
+// Make this file a module to avoid global scope conflicts
+export {};
+
+/**
+ * @typedef {Object} BatteryPIDevice
+ * @property {string} name
+ * @property {'apple'|'razer'} type
+ * @property {number|null} battery
+ * @property {boolean} [isCharging]
+ * @property {boolean} [connected]
+ * @property {string} [error]
+ * @property {number} [lastBattery]
+ */
+
+/**
+ * @typedef {Object} BatteryPISettings
+ * @property {string} [device1]
+ * @property {number} [device1Interval]
+ * @property {string} [device2]
+ * @property {number} [device2Interval]
  */
 
 // SDK configuration
@@ -23,6 +46,7 @@ const $dom = {
 };
 
 // Device list storage
+/** @type {BatteryPIDevice[]} */
 let deviceList = [];
 
 /**
@@ -31,15 +55,17 @@ let deviceList = [];
 const $propEvent = {
   /**
    * Called when settings are received from StreamDock
+   * @param {{settings: BatteryPISettings}} data
    */
   didReceiveSettings(data) {
     const settings = data.settings || {};
     loadSettings(settings);
-    $websocket.sendToPlugin({ event: 'getAllDevices' });
+    $websocket?.sendToPlugin({ event: 'getAllDevices' });
   },
 
   /**
    * Called when plugin sends data to PI
+   * @param {{event?: string, devices?: BatteryPIDevice[], message?: string, settings?: BatteryPISettings}} data
    */
   sendToPropertyInspector(data) {
     if (!data) return;
@@ -59,6 +85,7 @@ const $propEvent = {
           const appleCount = deviceList.filter((d) => d.type === 'apple').length;
           const razerCount = deviceList.filter((d) => d.type === 'razer').length;
           let msg = 'Found ';
+          /** @type {string[]} */
           const parts = [];
           if (appleCount > 0) parts.push(appleCount + ' Apple');
           if (razerCount > 0) parts.push(razerCount + ' Razer');
@@ -70,11 +97,11 @@ const $propEvent = {
         break;
       }
       case 'warning':
-        showWarning(data.message);
+        showWarning(data.message || '');
         break;
 
       case 'permissionError':
-        showPermissionError(data.message);
+        showPermissionError(data.message || '');
         break;
 
       case 'error':
@@ -87,13 +114,18 @@ const $propEvent = {
     }
   },
 
-  didReceiveGlobalSettings(data) {
+  /**
+   * @param {Record<string, unknown>} _data
+   */
+  didReceiveGlobalSettings(_data) {
     // Global settings received
   },
 };
 
 /**
  * Get device display name with type prefix and battery info
+ * @param {BatteryPIDevice} device
+ * @returns {string}
  */
 function getDeviceDisplayName(device) {
   const prefix = device.type === 'apple' ? '\uF8FF' : '\uD83D\uDDB1\uFE0F'; //  or 🖱️
@@ -120,6 +152,8 @@ function getDeviceDisplayName(device) {
 
 /**
  * Get unique device ID (type:name)
+ * @param {BatteryPIDevice} device
+ * @returns {string}
  */
 function getDeviceId(device) {
   return `${device.type}:${device.name}`;
@@ -135,6 +169,9 @@ function populateDeviceLists() {
 
 /**
  * Populate a single device select dropdown
+ * @param {DOMElementWithMethods|null} select
+ * @param {string} settingKey
+ * @param {boolean} [addNoneOption]
  */
 function populateDeviceSelect(select, settingKey, addNoneOption = false) {
   if (!select) return;
@@ -198,12 +235,13 @@ function populateDeviceSelect(select, settingKey, addNoneOption = false) {
   if (currentValue && deviceList.some((d) => getDeviceId(d) === currentValue)) {
     select.value = currentValue;
   } else if (typeof $settings !== 'undefined' && $settings && $settings[settingKey]) {
-    select.value = $settings[settingKey];
+    select.value = /** @type {string} */ ($settings[settingKey]);
   }
 }
 
 /**
  * Load settings into UI
+ * @param {BatteryPISettings} settings
  */
 function loadSettings(settings) {
   if (settings.device1 !== undefined && $dom.device1) {
@@ -211,7 +249,7 @@ function loadSettings(settings) {
   }
 
   if (settings.device1Interval !== undefined && $dom.device1Interval) {
-    $dom.device1Interval.value = settings.device1Interval;
+    $dom.device1Interval.value = String(settings.device1Interval);
     updateIntervalLabel1();
   }
 
@@ -220,7 +258,7 @@ function loadSettings(settings) {
   }
 
   if (settings.device2Interval !== undefined && $dom.device2Interval) {
-    $dom.device2Interval.value = settings.device2Interval;
+    $dom.device2Interval.value = String(settings.device2Interval);
     updateIntervalLabel2();
   }
 }
@@ -264,6 +302,8 @@ function refreshDevices() {
 
 /**
  * Show status message
+ * @param {string} message
+ * @param {string} type
  */
 function showStatus(message, type) {
   if (!$dom.statusMessage) return;
@@ -284,6 +324,7 @@ function showStatus(message, type) {
 
 /**
  * Show warning message (persistent)
+ * @param {string} message
  */
 function showWarning(message) {
   if (!$dom.warningMessage) return;
@@ -294,6 +335,7 @@ function showWarning(message) {
 
 /**
  * Show permission error with instructions
+ * @param {string} message
  */
 function showPermissionError(message) {
   if (!$dom.permissionError) return;
@@ -332,6 +374,7 @@ function updateIntervalLabel2() {
 
 /**
  * Set update interval for device 1 from clickable spans
+ * @param {string} value
  */
 function setUpdateInterval1(value) {
   if ($dom.device1Interval) {
@@ -343,6 +386,7 @@ function setUpdateInterval1(value) {
 
 /**
  * Set update interval for device 2 from clickable spans
+ * @param {string} value
  */
 function setUpdateInterval2(value) {
   if ($dom.device2Interval) {

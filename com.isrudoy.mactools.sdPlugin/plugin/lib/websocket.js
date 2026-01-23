@@ -1,5 +1,6 @@
 /**
  * WebSocket communication for Mac Tools Plugin
+ * @module lib/websocket
  */
 
 const WebSocket = require('ws');
@@ -7,19 +8,46 @@ const { log } = require('./common');
 const { getCurrentPI } = require('./state');
 
 // ============================================================
+// Type Definitions
+// ============================================================
+
+/**
+ * @typedef {import('../../../types/streamdock').StreamDockMessage} StreamDockMessage
+ */
+
+/**
+ * @callback MessageHandler
+ * @param {StreamDockMessage} message - Incoming message
+ * @returns {void}
+ */
+
+// ============================================================
 // WebSocket Instance
 // ============================================================
 
+/** @type {import('ws').WebSocket|null} */
 let websocket = null;
 
 // ============================================================
 // WebSocket Functions
 // ============================================================
 
+/**
+ * Get WebSocket instance
+ * @returns {import('ws').WebSocket|null}
+ */
 function getWebSocket() {
   return websocket;
 }
 
+/**
+ * Initialize WebSocket connection to StreamDock
+ * @param {string|number} port - WebSocket port
+ * @param {string} uuid - Plugin UUID
+ * @param {string} registerEvent - Registration event name
+ * @param {MessageHandler} onMessage - Message handler callback
+ * @returns {import('ws').WebSocket}
+ */
 function initWebSocket(port, uuid, registerEvent, onMessage) {
   log('[MacTools] Starting with port:', port, 'uuid:', uuid);
 
@@ -27,6 +55,7 @@ function initWebSocket(port, uuid, registerEvent, onMessage) {
 
   websocket.on('open', () => {
     log('[MacTools] WebSocket connected');
+    if (!websocket) return;
     websocket.send(
       JSON.stringify({
         event: registerEvent,
@@ -35,14 +64,15 @@ function initWebSocket(port, uuid, registerEvent, onMessage) {
     );
   });
 
-  websocket.on('message', (data) => {
+  websocket.on('message', (/** @type {Buffer} */ data) => {
+    /** @type {StreamDockMessage} */
     const message = JSON.parse(data.toString());
     if (onMessage) {
       onMessage(message);
     }
   });
 
-  websocket.on('error', (error) => {
+  websocket.on('error', (/** @type {Error} */ error) => {
     log('[MacTools] WebSocket error:', error);
   });
 
@@ -53,6 +83,12 @@ function initWebSocket(port, uuid, registerEvent, onMessage) {
   return websocket;
 }
 
+/**
+ * Send setImage to StreamDock
+ * @param {string} context - Action context
+ * @param {string|null} imageData - Base64 PNG data URL or null
+ * @returns {void}
+ */
 function setImage(context, imageData) {
   if (!imageData) return;
   if (websocket && websocket.readyState === WebSocket.OPEN) {
@@ -66,6 +102,11 @@ function setImage(context, imageData) {
   }
 }
 
+/**
+ * Clear button image
+ * @param {string} context - Action context
+ * @returns {void}
+ */
 function clearImage(context) {
   if (websocket && websocket.readyState === WebSocket.OPEN) {
     websocket.send(
@@ -78,6 +119,12 @@ function clearImage(context) {
   }
 }
 
+/**
+ * Set button title
+ * @param {string} context - Action context
+ * @param {string} title - Title text
+ * @returns {void}
+ */
 function setTitle(context, title) {
   if (websocket && websocket.readyState === WebSocket.OPEN) {
     websocket.send(
@@ -90,6 +137,11 @@ function setTitle(context, title) {
   }
 }
 
+/**
+ * Send data to Property Inspector
+ * @param {Record<string, unknown>} payload - Data to send
+ * @returns {void}
+ */
 function sendToPropertyInspector(payload) {
   const { action, context } = getCurrentPI();
   if (!context || !action) return;

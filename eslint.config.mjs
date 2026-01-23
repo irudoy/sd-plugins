@@ -28,10 +28,10 @@ export default [
     },
   },
   {
-    // Browser JS (Property Inspector)
+    // Browser JS (Property Inspector) - uses export {} for TypeScript module isolation
     files: ['**/driveinfo/**/*.js', '**/battery/**/*.js', '**/osascript/**/*.js', '**/vpn/**/*.js'],
     languageOptions: {
-      sourceType: 'script',
+      sourceType: 'module',
       globals: {
         ...globals.browser,
         // StreamDock SDK globals

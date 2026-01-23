@@ -1,5 +1,6 @@
 /**
  * Battery Monitor drawing functions
+ * @module lib/battery-drawing
  */
 
 const { createCanvas } = require('canvas');
@@ -12,9 +13,36 @@ const {
 } = require('./common');
 
 // ============================================================
+// Type Definitions
+// ============================================================
+
+/**
+ * @typedef {import('canvas').CanvasRenderingContext2D} CanvasContext
+ */
+
+/**
+ * Battery device information
+ * @typedef {Object} BatteryDevice
+ * @property {string} name - Device name
+ * @property {number|null} battery - Battery percentage (0-100) or null if unknown
+ * @property {boolean} [isCharging] - Whether device is charging
+ * @property {boolean} [connected] - Whether device is connected
+ * @property {boolean} [sleeping] - Whether device is in sleep mode
+ * @property {'apple'|'razer'} [type] - Device type
+ * @property {string} [error] - Error code ('access_denied', 'timeout', 'not_supported')
+ * @property {boolean} [isWired] - Whether Razer device is wired
+ * @property {number|null} [lastBattery] - Cached battery level when disconnected
+ */
+
+// ============================================================
 // Color Helper Functions
 // ============================================================
 
+/**
+ * Get battery color based on percentage
+ * @param {number} percent - Battery percentage
+ * @returns {string} Hex color code
+ */
 function getBatteryColor(percent) {
   if (percent > BATTERY_THRESHOLDS.high) {
     return COLORS.green;
@@ -24,6 +52,11 @@ function getBatteryColor(percent) {
   return COLORS.red;
 }
 
+/**
+ * Get dimmed battery color for sleep state
+ * @param {number} percent - Battery percentage
+ * @returns {string} Hex color code
+ */
 function getDimBatteryColor(percent) {
   if (percent > BATTERY_THRESHOLDS.high) {
     return COLORS.dimGreen;
@@ -37,6 +70,12 @@ function getDimBatteryColor(percent) {
 // Single Device Drawing Helpers
 // ============================================================
 
+/**
+ * Draw battery icon outline
+ * @param {CanvasContext} ctx - Canvas context
+ * @param {string} [color] - Outline color
+ * @returns {void}
+ */
 function drawBatteryOutline(ctx, color = COLORS.white) {
   const { x, y, width, height, tipWidth, tipHeight, cornerRadius } = BATTERY_ICON;
 
@@ -50,6 +89,13 @@ function drawBatteryOutline(ctx, color = COLORS.white) {
   ctx.fillRect(x + width, y + (height - tipHeight) / 2, tipWidth, tipHeight);
 }
 
+/**
+ * Draw battery fill level
+ * @param {CanvasContext} ctx - Canvas context
+ * @param {number} percent - Battery percentage
+ * @param {string} color - Fill color
+ * @returns {void}
+ */
 function drawBatteryFill(ctx, percent, color) {
   const { x, y, width, height, cornerRadius, padding } = BATTERY_ICON;
 
@@ -72,6 +118,12 @@ function drawBatteryFill(ctx, percent, color) {
 // Single Device Drawing Functions
 // ============================================================
 
+/**
+ * Draw battery with percentage
+ * @param {number} percent - Battery percentage
+ * @param {string} [deviceName] - Device name to display
+ * @returns {string} Base64 PNG data URL
+ */
 function drawBattery(percent, deviceName) {
   const canvas = createCanvas(CANVAS_SIZE, CANVAS_SIZE);
   const ctx = canvas.getContext('2d');
@@ -101,6 +153,11 @@ function drawBattery(percent, deviceName) {
   return canvas.toDataURL('image/png');
 }
 
+/**
+ * Draw "No Device" state
+ * @param {string} [deviceType] - Device type description
+ * @returns {string} Base64 PNG data URL
+ */
 function drawNoDevice(deviceType) {
   const canvas = createCanvas(CANVAS_SIZE, CANVAS_SIZE);
   const ctx = canvas.getContext('2d');
@@ -132,6 +189,11 @@ function drawNoDevice(deviceType) {
   return canvas.toDataURL('image/png');
 }
 
+/**
+ * Draw "Not Supported" state (wireless Razer without battery)
+ * @param {string} [deviceName] - Device name
+ * @returns {string} Base64 PNG data URL
+ */
 function drawNotSupported(deviceName) {
   const canvas = createCanvas(CANVAS_SIZE, CANVAS_SIZE);
   const ctx = canvas.getContext('2d');
@@ -168,6 +230,12 @@ function drawNotSupported(deviceName) {
   return canvas.toDataURL('image/png');
 }
 
+/**
+ * Draw charging state
+ * @param {string} [deviceName] - Device name
+ * @param {number|null} [batteryLevel] - Battery level if known
+ * @returns {string} Base64 PNG data URL
+ */
 function drawCharging(deviceName, batteryLevel) {
   const canvas = createCanvas(CANVAS_SIZE, CANVAS_SIZE);
   const ctx = canvas.getContext('2d');
@@ -219,6 +287,12 @@ function drawCharging(deviceName, batteryLevel) {
   return canvas.toDataURL('image/png');
 }
 
+/**
+ * Draw sleeping state (Razer device in sleep mode)
+ * @param {string} [deviceName] - Device name
+ * @param {number|null} [batteryLevel] - Battery level if known
+ * @returns {string} Base64 PNG data URL
+ */
 function drawSleeping(deviceName, batteryLevel) {
   const canvas = createCanvas(CANVAS_SIZE, CANVAS_SIZE);
   const ctx = canvas.getContext('2d');
@@ -279,6 +353,12 @@ function drawSleeping(deviceName, batteryLevel) {
   return canvas.toDataURL('image/png');
 }
 
+/**
+ * Draw offline state
+ * @param {string} [deviceName] - Device name
+ * @param {number|null} [cachedBattery] - Cached battery level
+ * @returns {string} Base64 PNG data URL
+ */
 function drawOffline(deviceName, cachedBattery) {
   const canvas = createCanvas(CANVAS_SIZE, CANVAS_SIZE);
   const ctx = canvas.getContext('2d');
@@ -327,6 +407,14 @@ function drawOffline(deviceName, cachedBattery) {
 // Compact Mode Drawing Functions (Dual Device)
 // ============================================================
 
+/**
+ * Draw compact battery outline (for dual device mode)
+ * @param {CanvasContext} ctx - Canvas context
+ * @param {number} x - X position
+ * @param {number} y - Y position
+ * @param {string} [color] - Outline color
+ * @returns {void}
+ */
 function drawCompactBatteryOutline(ctx, x, y, color = COLORS.white) {
   const { width, height, tipWidth, tipHeight, cornerRadius } = BATTERY_ICON_COMPACT;
 
@@ -340,6 +428,15 @@ function drawCompactBatteryOutline(ctx, x, y, color = COLORS.white) {
   ctx.fillRect(x + width, y + (height - tipHeight) / 2, tipWidth, tipHeight);
 }
 
+/**
+ * Draw compact battery fill (for dual device mode)
+ * @param {CanvasContext} ctx - Canvas context
+ * @param {number} x - X position
+ * @param {number} y - Y position
+ * @param {number} percent - Battery percentage
+ * @param {string} color - Fill color
+ * @returns {void}
+ */
 function drawCompactBatteryFill(ctx, x, y, percent, color) {
   const { width, height, cornerRadius, padding } = BATTERY_ICON_COMPACT;
 
@@ -358,6 +455,13 @@ function drawCompactBatteryFill(ctx, x, y, percent, color) {
   }
 }
 
+/**
+ * Draw compact device row (for dual device mode)
+ * @param {CanvasContext} ctx - Canvas context
+ * @param {BatteryDevice|null} device - Device info
+ * @param {number} yOffset - Y offset for this row
+ * @returns {void}
+ */
 function drawCompactDevice(ctx, device, yOffset) {
   const { width: battWidth, height: battHeight, tipWidth } = BATTERY_ICON_COMPACT;
   const batteryX = 12;
@@ -543,6 +647,12 @@ function drawCompactDevice(ctx, device, yOffset) {
   }
 }
 
+/**
+ * Draw dual device battery display
+ * @param {BatteryDevice|null} device1 - First device
+ * @param {BatteryDevice|null} device2 - Second device
+ * @returns {string} Base64 PNG data URL
+ */
 function drawDualBattery(device1, device2) {
   const canvas = createCanvas(CANVAS_SIZE, CANVAS_SIZE);
   const ctx = canvas.getContext('2d');
@@ -563,6 +673,11 @@ function drawDualBattery(device1, device2) {
   return canvas.toDataURL('image/png');
 }
 
+/**
+ * Draw single device button with appropriate state
+ * @param {BatteryDevice|null} device - Device info
+ * @returns {string} Base64 PNG data URL
+ */
 function drawSingleDeviceButton(device) {
   if (!device) {
     return drawNoDevice('No Device');

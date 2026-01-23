@@ -4,6 +4,7 @@
  * - Battery Monitor Action: Shows battery levels for Apple/Razer devices
  *
  * Entry point with event routing to action modules.
+ * @module plugin/index
  */
 
 const { log, DRIVEINFO_ACTION, BATTERY_ACTION, OSASCRIPT_ACTION } = require('./lib/common');
@@ -20,9 +21,38 @@ const battery = require('./actions/battery');
 const osascript = require('./actions/osascript');
 
 // ============================================================
+// Type Definitions
+// ============================================================
+
+/**
+ * @typedef {import('../../types/streamdock').StreamDockMessage} StreamDockMessage
+ * @typedef {import('../../types/streamdock').AppearPayload} AppearPayload
+ * @typedef {import('../../types/streamdock').KeyPayload} KeyPayload
+ * @typedef {import('../../types/streamdock').SettingsPayload} SettingsPayload
+ * @typedef {import('../../types/streamdock').SendToPluginPayload} SendToPluginPayload
+ */
+
+/**
+ * Action-specific settings types (imported from action modules)
+ * @typedef {import('./actions/driveinfo').DriveInfoSettings} DriveInfoSettings
+ * @typedef {import('./actions/battery').BatterySettings} BatterySettings
+ * @typedef {import('./actions/osascript').OSAScriptSettings} OSAScriptSettings
+ */
+
+/**
+ * Union type for all action settings
+ * @typedef {DriveInfoSettings | BatterySettings | OSAScriptSettings} ActionSettings
+ */
+
+// ============================================================
 // Message Handler
 // ============================================================
 
+/**
+ * Handle incoming StreamDock message
+ * @param {StreamDockMessage} message - Incoming message
+ * @returns {void}
+ */
 function handleMessage(message) {
   const { event, action, context, payload } = message;
   log('[MacTools] Received event:', event, 'action:', action);
@@ -58,6 +88,13 @@ function handleMessage(message) {
 // Event Routing
 // ============================================================
 
+/**
+ * Route willAppear event to action
+ * @param {string} action - Action UUID
+ * @param {string} context - Action context
+ * @param {AppearPayload} payload - Event payload
+ * @returns {void}
+ */
 function onWillAppear(action, context, payload) {
   if (action === DRIVEINFO_ACTION) {
     driveinfo.onWillAppear(context, payload);
@@ -68,6 +105,13 @@ function onWillAppear(action, context, payload) {
   }
 }
 
+/**
+ * Route willDisappear event to action
+ * @param {string} action - Action UUID
+ * @param {string} context - Action context
+ * @param {unknown} _payload - Event payload (unused)
+ * @returns {void}
+ */
 function onWillDisappear(action, context, _payload) {
   if (action === DRIVEINFO_ACTION) {
     driveinfo.onWillDisappear(context);
@@ -79,6 +123,13 @@ function onWillDisappear(action, context, _payload) {
   deleteContext(context);
 }
 
+/**
+ * Route keyUp event to action
+ * @param {string} action - Action UUID
+ * @param {string} context - Action context
+ * @param {KeyPayload} payload - Event payload
+ * @returns {void}
+ */
 function onKeyUp(action, context, payload) {
   if (action === DRIVEINFO_ACTION) {
     driveinfo.onKeyUp(context, payload);
@@ -89,6 +140,13 @@ function onKeyUp(action, context, payload) {
   }
 }
 
+/**
+ * Route sendToPlugin event to action
+ * @param {string} action - Action UUID
+ * @param {string} context - Action context
+ * @param {SendToPluginPayload} payload - PI payload
+ * @returns {void}
+ */
 function onSendToPlugin(action, context, payload) {
   // Ensure context exists
   if (!contexts[context]) {
@@ -115,7 +173,8 @@ function onSendToPlugin(action, context, payload) {
   }
 
   // Handle settings update
-  const settings = payload;
+  /** @type {ActionSettings} */
+  const settings = /** @type {ActionSettings} */ (payload);
   if (contexts[context]) {
     contexts[context].settings = settings;
   } else {
@@ -123,14 +182,21 @@ function onSendToPlugin(action, context, payload) {
   }
 
   if (action === DRIVEINFO_ACTION) {
-    driveinfo.onSettingsUpdate(context, settings);
+    driveinfo.onSettingsUpdate(context, /** @type {DriveInfoSettings} */ (settings));
   } else if (action === BATTERY_ACTION) {
-    battery.onSettingsUpdate(context, settings);
+    battery.onSettingsUpdate(context, /** @type {BatterySettings} */ (settings));
   } else if (action === OSASCRIPT_ACTION) {
-    osascript.onSettingsUpdate(context, settings);
+    osascript.onSettingsUpdate(context, /** @type {OSAScriptSettings} */ (settings));
   }
 }
 
+/**
+ * Route propertyInspectorDidAppear event to action
+ * @param {string} action - Action UUID
+ * @param {string} context - Action context
+ * @param {unknown} _payload - Event payload (unused)
+ * @returns {void}
+ */
 function onPropertyInspectorDidAppear(action, context, _payload) {
   setCurrentPI(action, context);
 
@@ -149,6 +215,13 @@ function onPropertyInspectorDidAppear(action, context, _payload) {
   }
 }
 
+/**
+ * Route didReceiveSettings event to action
+ * @param {string} action - Action UUID
+ * @param {string} context - Action context
+ * @param {SettingsPayload} payload - Settings payload
+ * @returns {void}
+ */
 function onDidReceiveSettings(action, context, payload) {
   if (action === DRIVEINFO_ACTION) {
     driveinfo.onDidReceiveSettings(context, payload);
@@ -163,6 +236,14 @@ function onDidReceiveSettings(action, context, payload) {
 // WebSocket Connection
 // ============================================================
 
+/**
+ * StreamDock entry point
+ * @param {string} port - WebSocket port
+ * @param {string} uuid - Plugin UUID
+ * @param {string} registerEvent - Registration event
+ * @param {string} [_info] - Application info (unused)
+ * @returns {void}
+ */
 function connectElgatoStreamDeckSocket(port, uuid, registerEvent, _info) {
   initWebSocket(port, uuid, registerEvent, handleMessage);
 }
@@ -174,8 +255,16 @@ function connectElgatoStreamDeckSocket(port, uuid, registerEvent, _info) {
 module.exports = { connectElgatoStreamDeckSocket };
 
 if (process.argv.length > 2) {
+  /** @type {string[]} */
   const args = process.argv.slice(2);
-  let port, uuid, registerEvent, info;
+  /** @type {string|undefined} */
+  let port;
+  /** @type {string|undefined} */
+  let uuid;
+  /** @type {string|undefined} */
+  let registerEvent;
+  /** @type {string|undefined} */
+  let info;
 
   for (let i = 0; i < args.length; i++) {
     switch (args[i]) {

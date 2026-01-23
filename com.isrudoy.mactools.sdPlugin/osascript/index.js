@@ -1,6 +1,16 @@
 /**
  * OSA Script - Property Inspector
  * Using StreamDock SDK pattern
+ * @module osascript/index
+ */
+
+// Make this file a module to avoid global scope conflicts
+export {};
+
+/**
+ * @typedef {Object} OSAScriptPISettings
+ * @property {'AppleScript'|'JavaScript'} [language]
+ * @property {string} [scriptText]
  */
 
 // SDK configuration
@@ -21,6 +31,7 @@ const $dom = {
 const $propEvent = {
   /**
    * Called when settings are received from StreamDock
+   * @param {{settings: OSAScriptPISettings}} data
    */
   didReceiveSettings(data) {
     const settings = data.settings || {};
@@ -29,18 +40,23 @@ const $propEvent = {
 
   /**
    * Called when plugin sends data to PI
+   * @param {Record<string, unknown>} _data
    */
-  sendToPropertyInspector(data) {
+  sendToPropertyInspector(_data) {
     // No data expected from plugin for this simple action
   },
 
-  didReceiveGlobalSettings(data) {
+  /**
+   * @param {Record<string, unknown>} _data
+   */
+  didReceiveGlobalSettings(_data) {
     // Global settings received
   },
 };
 
 /**
  * Load settings into UI
+ * @param {OSAScriptPISettings} settings
  */
 function loadSettings(settings) {
   // Default to AppleScript

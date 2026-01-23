@@ -1,5 +1,6 @@
 /**
  * Battery Monitor action for Mac Tools Plugin
+ * @module actions/battery
  */
 
 const {
@@ -34,9 +35,44 @@ const {
 } = require('../lib/battery-drawing');
 
 // ============================================================
+// Type Definitions
+// ============================================================
+
+/**
+ * @typedef {import('../../../types/streamdock').AppearPayload<BatterySettings>} AppearPayloadBattery
+ * @typedef {import('../../../types/streamdock').KeyPayload<BatterySettings>} KeyPayloadBattery
+ * @typedef {import('../../../types/streamdock').SettingsPayload<BatterySettings>} SettingsPayloadBattery
+ * @typedef {import('../../../types/streamdock').SendToPluginPayload} SendToPluginPayload
+ * @typedef {import('../lib/battery-drawing').BatteryDevice} BatteryDevice
+ * @typedef {import('../lib/state').CachedDevice} CachedDevice
+ */
+
+/**
+ * Battery Monitor settings
+ * @typedef {Object} BatterySettings
+ * @property {string} [device1] - First device ID (type:name)
+ * @property {number|string} [device1Interval] - Update interval for device 1
+ * @property {string} [device2] - Second device ID (empty for single mode)
+ * @property {number|string} [device2Interval] - Update interval for device 2
+ */
+
+/**
+ * Parsed device ID
+ * @typedef {Object} DeviceId
+ * @property {string|null} type - Device type ('apple' or 'razer')
+ * @property {string|null} name - Device name
+ */
+
+// ============================================================
 // Device Cache Management
 // ============================================================
 
+/**
+ * Get unique key for device
+ * @param {CachedDevice} device - Device info
+ * @param {'apple'|'razer'} type - Device type
+ * @returns {string}
+ */
 function getDeviceKey(device, type) {
   if (type === 'apple' && device.address) {
     return device.address;
@@ -44,6 +80,12 @@ function getDeviceKey(device, type) {
   return device.name;
 }
 
+/**
+ * Update device cache with current devices
+ * @param {'apple'|'razer'} type - Device type
+ * @param {CachedDevice[]} devices - Current devices
+ * @returns {void}
+ */
 function updateDeviceCache(type, devices) {
   const now = Date.now();
   const cache = getDeviceCache(type);
@@ -68,10 +110,16 @@ function updateDeviceCache(type, devices) {
   const maxAge = 24 * 60 * 60 * 1000;
   setDeviceCache(
     type,
-    cache.filter((d) => now - d.lastSeen < maxAge)
+    cache.filter((d) => now - (d.lastSeen ?? 0) < maxAge)
   );
 }
 
+/**
+ * Get merged list of current and cached devices
+ * @param {'apple'|'razer'} type - Device type
+ * @param {CachedDevice[]} currentDevices - Currently connected devices
+ * @returns {CachedDevice[]}
+ */
 function getMergedDeviceList(type, currentDevices) {
   updateDeviceCache(type, currentDevices);
 
@@ -103,6 +151,11 @@ function getMergedDeviceList(type, currentDevices) {
 // Device Detection
 // ============================================================
 
+/**
+ * Parse device ID string into type and name
+ * @param {string} deviceId - Device ID (e.g., "apple:Magic Keyboard")
+ * @returns {DeviceId}
+ */
 function parseDeviceId(deviceId) {
   if (!deviceId) return { type: null, name: null };
   const colonIndex = deviceId.indexOf(':');
@@ -113,7 +166,12 @@ function parseDeviceId(deviceId) {
   };
 }
 
+/**
+ * Get all battery devices (async)
+ * @returns {Promise<BatteryDevice[]>}
+ */
 async function getAllBatteryDevicesAsync() {
+  /** @type {BatteryDevice[]} */
   const allDevices = [];
 
   // Get Apple devices (callback-based, wrap in Promise)
@@ -150,12 +208,23 @@ async function getAllBatteryDevicesAsync() {
   return allDevices;
 }
 
+/**
+ * Get all battery devices (callback-based)
+ * @param {(error: Error|null, devices: BatteryDevice[]) => void} callback
+ * @returns {void}
+ */
 function getAllBatteryDevices(callback) {
   getAllBatteryDevicesAsync()
     .then((devices) => callback(null, devices))
     .catch((err) => callback(err, []));
 }
 
+/**
+ * Get device by type and name (async)
+ * @param {string|null} type - Device type
+ * @param {string|null} name - Device name
+ * @returns {Promise<BatteryDevice|null>}
+ */
 async function getDeviceByTypeAndNameAsync(type, name) {
   if (type === 'apple') {
     return new Promise((resolve) => {
@@ -175,7 +244,7 @@ async function getDeviceByTypeAndNameAsync(type, name) {
           } else {
             // No cache - return device with name from settings
             resolve({
-              name: name,
+              name: name || 'Unknown Device',
               battery: null,
               isCharging: false,
               connected: false,
@@ -199,7 +268,7 @@ async function getDeviceByTypeAndNameAsync(type, name) {
       const cached = getCachedRazerBattery(name);
       if (cached) {
         return {
-          name: name,
+          name: name || 'Unknown Device',
           battery: cached.battery,
           isCharging: false,
           connected: false,
@@ -208,7 +277,7 @@ async function getDeviceByTypeAndNameAsync(type, name) {
       }
       // No cache - return device with name from settings
       return {
-        name: name,
+        name: name || 'Unknown Device',
         battery: null,
         isCharging: false,
         connected: false,
@@ -223,7 +292,7 @@ async function getDeviceByTypeAndNameAsync(type, name) {
       isCharging: result.isCharging,
       isWired: device.isWired,
       sleeping: result.sleeping,
-      error: result.error,
+      error: result.error ?? undefined,
       type: 'razer',
     };
   } else {
@@ -232,6 +301,13 @@ async function getDeviceByTypeAndNameAsync(type, name) {
   }
 }
 
+/**
+ * Get device by type and name (callback-based)
+ * @param {string|null} type - Device type
+ * @param {string|null} name - Device name
+ * @param {(error: Error|null, device: BatteryDevice|null) => void} callback
+ * @returns {void}
+ */
 function getDeviceByTypeAndName(type, name, callback) {
   getDeviceByTypeAndNameAsync(type, name)
     .then((device) => callback(null, device))
@@ -242,6 +318,12 @@ function getDeviceByTypeAndName(type, name, callback) {
 // Update Functions
 // ============================================================
 
+/**
+ * Update battery button display
+ * @param {string} context - Action context
+ * @param {BatterySettings} [settings] - Display settings
+ * @returns {Promise<void>}
+ */
 async function updateBatteryButton(context, settings = {}) {
   const device1Id = settings.device1 || '';
   const device2Id = settings.device2 || '';
@@ -270,17 +352,29 @@ async function updateBatteryButton(context, settings = {}) {
 // Timer Functions
 // ============================================================
 
+/**
+ * Start battery update timer
+ * @param {string} context - Action context
+ * @param {BatterySettings} [settings] - Display settings
+ * @returns {void}
+ */
 function startBatteryTimer(context, settings = {}) {
   stopTimer(context);
 
   const interval1 = Math.max(
     MIN_UPDATE_INTERVAL,
-    Math.min(parseInt(settings.device1Interval) || DEFAULT_UPDATE_INTERVAL, MAX_UPDATE_INTERVAL)
+    Math.min(
+      parseInt(String(settings.device1Interval)) || DEFAULT_UPDATE_INTERVAL,
+      MAX_UPDATE_INTERVAL
+    )
   );
   const interval2 = settings.device2
     ? Math.max(
         MIN_UPDATE_INTERVAL,
-        Math.min(parseInt(settings.device2Interval) || DEFAULT_UPDATE_INTERVAL, MAX_UPDATE_INTERVAL)
+        Math.min(
+          parseInt(String(settings.device2Interval)) || DEFAULT_UPDATE_INTERVAL,
+          MAX_UPDATE_INTERVAL
+        )
       )
     : interval1;
   const updateInterval = Math.min(interval1, interval2);
@@ -302,6 +396,10 @@ function startBatteryTimer(context, settings = {}) {
 // Property Inspector Communication
 // ============================================================
 
+/**
+ * Send all device list to Property Inspector
+ * @returns {void}
+ */
 function sendAllDeviceList() {
   let hasAccessError = false;
 
@@ -343,6 +441,12 @@ function sendAllDeviceList() {
 // Event Handlers
 // ============================================================
 
+/**
+ * Handle action appearing
+ * @param {string} context - Action context
+ * @param {AppearPayloadBattery} payload - Event payload
+ * @returns {void}
+ */
 function onWillAppear(context, payload) {
   const settings = payload?.settings || {};
   setContext(context, { settings, action: BATTERY_ACTION });
@@ -350,15 +454,32 @@ function onWillAppear(context, payload) {
   startBatteryTimer(context, settings);
 }
 
+/**
+ * Handle action disappearing
+ * @param {string} context - Action context
+ * @returns {void}
+ */
 function onWillDisappear(context) {
   stopTimer(context);
 }
 
+/**
+ * Handle key release
+ * @param {string} context - Action context
+ * @param {KeyPayloadBattery} payload - Event payload
+ * @returns {void}
+ */
 function onKeyUp(context, payload) {
   const settings = payload?.settings || contexts[context]?.settings || {};
   updateBatteryButton(context, settings);
 }
 
+/**
+ * Handle data from Property Inspector
+ * @param {string} context - Action context
+ * @param {SendToPluginPayload} payload - PI payload
+ * @returns {boolean}
+ */
 function onSendToPlugin(context, payload) {
   if (payload && payload.event === 'getAllDevices') {
     sendAllDeviceList();
@@ -367,10 +488,21 @@ function onSendToPlugin(context, payload) {
   return false;
 }
 
+/**
+ * Handle Property Inspector appearing
+ * @param {string} _context - Action context
+ * @returns {void}
+ */
 function onPropertyInspectorDidAppear(_context) {
   sendAllDeviceList();
 }
 
+/**
+ * Handle settings update
+ * @param {string} context - Action context
+ * @param {BatterySettings} settings - New settings
+ * @returns {void}
+ */
 function onSettingsUpdate(context, settings) {
   if (contexts[context]) {
     contexts[context].settings = settings;
@@ -382,6 +514,12 @@ function onSettingsUpdate(context, settings) {
   startBatteryTimer(context, settings);
 }
 
+/**
+ * Handle settings received
+ * @param {string} context - Action context
+ * @param {SettingsPayloadBattery} payload - Settings payload
+ * @returns {void}
+ */
 function onDidReceiveSettings(context, payload) {
   onSettingsUpdate(context, payload?.settings || {});
 }
