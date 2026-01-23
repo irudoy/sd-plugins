@@ -4,9 +4,6 @@
  * @module vpn/index
  */
 
-// Make this file a module to avoid global scope conflicts
-export {};
-
 /**
  * @typedef {Object} VpnPIClient
  * @property {string} id

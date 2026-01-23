@@ -17,11 +17,7 @@
   },
   "include": [
     "types/**/*.d.ts",
-    "com.isrudoy.*/plugin/**/*.js",
-    "com.isrudoy.mactools.sdPlugin/battery/index.js",
-    "com.isrudoy.mactools.sdPlugin/driveinfo/index.js",
-    "com.isrudoy.mactools.sdPlugin/osascript/index.js",
-    "com.isrudoy.unifi.sdPlugin/vpn/index.js"
+    "com.isrudoy.*/plugin/**/*.js"
   ],
   "exclude": [
     "node_modules",

@@ -4,9 +4,6 @@
  * @module driveinfo/index
  */
 
-// Make this file a module to avoid global scope conflicts
-export {};
-
 /**
  * @typedef {Object} DrivePIDisk
  * @property {string} name

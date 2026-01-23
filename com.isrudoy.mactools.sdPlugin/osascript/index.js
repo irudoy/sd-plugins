@@ -4,9 +4,6 @@
  * @module osascript/index
  */
 
-// Make this file a module to avoid global scope conflicts
-export {};
-
 /**
  * @typedef {Object} OSAScriptPISettings
  * @property {'AppleScript'|'JavaScript'} [language]

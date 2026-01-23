@@ -59,6 +59,7 @@ const { createCanvas } = require('canvas');
  * @property {number} [tx_bytes_r] - Alternative TX rate
  * @property {number} [rx_rate] - Legacy RX rate field
  * @property {number} [tx_rate] - Legacy TX rate field
+ * @property {string} [error_reason] - Error reason (e.g. AUTHENTICATION_FAILURE)
  */
 
 /**
@@ -415,8 +416,8 @@ function drawConnected(vpnName, status) {
   const canvas = createCanvas(144, 144);
   const ctx = canvas.getContext('2d');
 
-  // Dark green background
-  ctx.fillStyle = '#1a3d1a';
+  // Black background
+  ctx.fillStyle = '#000000';
   ctx.fillRect(0, 0, 144, 144);
 
   // VPN name (top)
@@ -469,8 +470,8 @@ function drawConnecting(vpnName) {
   const canvas = createCanvas(144, 144);
   const ctx = canvas.getContext('2d');
 
-  // Dark yellow/orange background
-  ctx.fillStyle = '#3d3d1a';
+  // Black background
+  ctx.fillStyle = '#000000';
   ctx.fillRect(0, 0, 144, 144);
 
   // VPN name (top)
@@ -503,8 +504,8 @@ function drawDisconnected(vpnName) {
   const canvas = createCanvas(144, 144);
   const ctx = canvas.getContext('2d');
 
-  // Dark gray background
-  ctx.fillStyle = '#2a2a2a';
+  // Black background
+  ctx.fillStyle = '#000000';
   ctx.fillRect(0, 0, 144, 144);
 
   // VPN name (top)
@@ -653,11 +654,15 @@ async function updateButton(context, settings = {}) {
     const vpnState = vpnStatus?.status?.toUpperCase();
     const isConnected = vpnState === 'CONNECTED' || vpnStatus?.connected === true;
     const isConnecting = vpnState === 'CONNECTING' || vpnState === 'RECONNECTING';
+    const isError = vpnState === 'CONNECTION_FAILED' || vpnState === 'CONNECTION_ERROR' || vpnState === 'ERROR';
 
     if (isConnected) {
       imageData = drawConnected(vpn.name, vpnStatus);
     } else if (isConnecting) {
       imageData = drawConnecting(vpn.name);
+    } else if (isError) {
+      const errorMsg = vpnStatus?.error_reason || 'Connection Failed';
+      imageData = drawError(errorMsg.replace(/_/g, ' '));
     } else {
       imageData = drawDisconnected(vpn.name);
     }
