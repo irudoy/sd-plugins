@@ -29,7 +29,13 @@ export default [
   },
   {
     // Browser JS (Property Inspector) - uses export {} for TypeScript module isolation
-    files: ['**/driveinfo/**/*.js', '**/battery/**/*.js', '**/osascript/**/*.js', '**/vpn/**/*.js'],
+    files: [
+      '**/driveinfo/**/*.js',
+      '**/battery/**/*.js',
+      '**/osascript/**/*.js',
+      '**/vpn/**/*.js',
+      '**/light/**/*.js',
+    ],
     languageOptions: {
       sourceType: 'module',
       globals: {

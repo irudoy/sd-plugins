@@ -1,0 +1,12 @@
+{
+  "name": "com.isrudoy.spruthub",
+  "version": "1.0.0",
+  "description": "Sprut.Hub smart home control for StreamDock",
+  "main": "plugin/index.js",
+  "dependencies": {
+    "canvas": "3.2.1",
+    "ws": "8.14.2"
+  },
+  "author": "isrudoy",
+  "license": "MIT"
+}

@@ -654,7 +654,8 @@ async function updateButton(context, settings = {}) {
     const vpnState = vpnStatus?.status?.toUpperCase();
     const isConnected = vpnState === 'CONNECTED' || vpnStatus?.connected === true;
     const isConnecting = vpnState === 'CONNECTING' || vpnState === 'RECONNECTING';
-    const isError = vpnState === 'CONNECTION_FAILED' || vpnState === 'CONNECTION_ERROR' || vpnState === 'ERROR';
+    const isError =
+      vpnState === 'CONNECTION_FAILED' || vpnState === 'CONNECTION_ERROR' || vpnState === 'ERROR';
 
     if (isConnected) {
       imageData = drawConnected(vpn.name, vpnStatus);

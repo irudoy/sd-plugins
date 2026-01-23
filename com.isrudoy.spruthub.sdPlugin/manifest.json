@@ -1,0 +1,38 @@
+{
+  "Actions": [
+    {
+      "Icon": "static/img/lightIcon",
+      "Name": "Light",
+      "States": [
+        {
+          "Image": "static/img/lightAction"
+        }
+      ],
+      "Controllers": ["Keypad"],
+      "UUID": "com.isrudoy.spruthub.light",
+      "PropertyInspectorPath": "light/index.html",
+      "Tooltip": "Control Sprut.Hub lights"
+    }
+  ],
+  "SDKVersion": 1,
+  "Author": "isrudoy",
+  "Name": "Sprut.Hub",
+  "Icon": "static/img/pluginIcon",
+  "CodePathMac": "plugin/index.js",
+  "Description": "Control Sprut.Hub smart home devices",
+  "Category": "Sprut.Hub",
+  "CategoryIcon": "static/img/categoryIcon",
+  "Version": "1.0.0",
+  "OS": [
+    {
+      "Platform": "mac",
+      "MinimumVersion": "10.11"
+    }
+  ],
+  "Software": {
+    "MinimumVersion": "3.10.188.226"
+  },
+  "Nodejs": {
+    "Version": "20"
+  }
+}

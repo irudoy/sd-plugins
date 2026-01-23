@@ -8,6 +8,7 @@ Monorepo for StreamDock plugins (macOS).
 |--------|-----|-------------|
 | mactools | `com.isrudoy.mactools` | Drive Info, Battery Monitor, Run Script |
 | unifi | `com.isrudoy.unifi` | VPN Status - Unifi Network VPN client |
+| spruthub | `com.isrudoy.spruthub` | Sprut.Hub smart home control (lights) |
 
 **Architecture:** Node.js backend + HTML/JS Property Inspector
 **SDK:** StreamDock SDK (NOT Elgato Stream Deck SDK)
@@ -216,6 +217,18 @@ if (dataPartition) {
 | canvas | PNG image generation |
 
 **Note:** canvas requires native compilation.
+
+## Coding Style
+
+### TypeScript/JSDoc Rules
+- **Never use `@ts-ignore`** — fix the type definitions instead
+- **Avoid type casts** where possible — use proper type definitions or restructure code
+- **Type casts are acceptable for**:
+  - WebSocket/API responses returning `unknown` (cast result to proper response typedef)
+  - Event handler data where the emitter uses `unknown` type
+- If API returns unknown structure, define proper types in JSDoc `@typedef`
+- Use optional chaining (`?.`) and nullish coalescing (`??`) for safe property access
+- Prefer runtime type guards (`typeof x === 'string'`) over casts when validating external input
 
 ## Common Pitfalls
 
