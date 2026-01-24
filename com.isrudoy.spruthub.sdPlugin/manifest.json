@@ -12,6 +12,97 @@
       "UUID": "com.isrudoy.spruthub.light",
       "PropertyInspectorPath": "light/index.html",
       "Tooltip": "Control Sprut.Hub lights"
+    },
+    {
+      "Icon": "static/img/lightIcon",
+      "Name": "Switch",
+      "States": [
+        {
+          "Image": "static/img/lightAction"
+        }
+      ],
+      "Controllers": ["Keypad"],
+      "UUID": "com.isrudoy.spruthub.switch",
+      "PropertyInspectorPath": "switch/index.html",
+      "Tooltip": "Control Sprut.Hub switches"
+    },
+    {
+      "Icon": "static/img/lightIcon",
+      "Name": "Outlet",
+      "States": [
+        {
+          "Image": "static/img/lightAction"
+        }
+      ],
+      "Controllers": ["Keypad"],
+      "UUID": "com.isrudoy.spruthub.outlet",
+      "PropertyInspectorPath": "outlet/index.html",
+      "Tooltip": "Control Sprut.Hub outlets"
+    },
+    {
+      "Icon": "static/img/lightIcon",
+      "Name": "Lock",
+      "States": [
+        {
+          "Image": "static/img/lightAction"
+        }
+      ],
+      "Controllers": ["Keypad"],
+      "UUID": "com.isrudoy.spruthub.lock",
+      "PropertyInspectorPath": "lock/index.html",
+      "Tooltip": "Control Sprut.Hub locks"
+    },
+    {
+      "Icon": "static/img/lightIcon",
+      "Name": "Cover",
+      "States": [
+        {
+          "Image": "static/img/lightAction"
+        }
+      ],
+      "Controllers": ["Keypad"],
+      "UUID": "com.isrudoy.spruthub.cover",
+      "PropertyInspectorPath": "cover/index.html",
+      "Tooltip": "Control Sprut.Hub window coverings"
+    },
+    {
+      "Icon": "static/img/lightIcon",
+      "Name": "Thermostat",
+      "States": [
+        {
+          "Image": "static/img/lightAction"
+        }
+      ],
+      "Controllers": ["Keypad"],
+      "UUID": "com.isrudoy.spruthub.thermostat",
+      "PropertyInspectorPath": "thermostat/index.html",
+      "Tooltip": "Control Sprut.Hub thermostats"
+    },
+    {
+      "Icon": "static/img/lightIcon",
+      "Name": "Sensor",
+      "States": [
+        {
+          "Image": "static/img/lightAction"
+        }
+      ],
+      "Controllers": ["Keypad"],
+      "UUID": "com.isrudoy.spruthub.sensor",
+      "PropertyInspectorPath": "sensor/index.html",
+      "Tooltip": "Display Sprut.Hub sensor values"
+    },
+    {
+      "Icon": "static/img/lightIcon",
+      "Name": "Button",
+      "States": [
+        {
+          "Image": "static/img/lightAction"
+        }
+      ],
+      "Controllers": ["Keypad"],
+      "UUID": "com.isrudoy.spruthub.button",
+      "PropertyInspectorPath": "button/index.html",
+      "Tooltip": "Trigger Sprut.Hub button events"
     }
   ],
   "SDKVersion": 1,

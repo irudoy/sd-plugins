@@ -22,10 +22,11 @@ const { log, REQUEST_TIMEOUT, MAX_RECONNECT_ATTEMPTS } = require('./common');
  * @property {number} cId - Characteristic ID
  * @property {number} sId - Service ID
  * @property {number} aId - Accessory ID
- * @property {number|string} type - Characteristic type (37 = On, or string like "On")
+ * @property {number|string} [type] - Characteristic type (may be at top level or in control)
  * @property {Object} [control] - Control object
  * @property {WrappedValue} [control.value] - Current value
  * @property {string} [control.name] - Characteristic name
+ * @property {string|number} [control.type] - Characteristic type (Sprut.Hub format)
  */
 
 /**
@@ -42,6 +43,9 @@ const { log, REQUEST_TIMEOUT, MAX_RECONNECT_ATTEMPTS } = require('./common');
  * @property {number} [room] - Room ID
  * @property {number} [roomId] - Room ID (alternative field)
  * @property {SprutHubService[]} [services] - Accessory services
+ * @property {boolean} [online] - Whether accessory is online (from API)
+ * @property {boolean} [reachable] - Whether accessory is reachable
+ * @property {string} [status] - Accessory status
  */
 
 /**
@@ -102,7 +106,7 @@ const { log, REQUEST_TIMEOUT, MAX_RECONNECT_ATTEMPTS } = require('./common');
 
 class SprutHubClient {
   // ============================================================
-  // Static Constants
+  // Static Constants - Service Types
   // ============================================================
 
   /** @type {number} Lightbulb service type */
@@ -116,6 +120,40 @@ class SprutHubClient {
   static SERVICE_LIGHTBULB_NAME = 'Lightbulb';
   static CHAR_ON_NAMES = ['On', 'Power', 'PowerState'];
   static CHAR_BRIGHTNESS_NAMES = ['Brightness'];
+
+  // Service types (strings from API, some have numeric fallbacks)
+  static SERVICE_TYPES = {
+    LIGHTBULB: ['Lightbulb', 13],
+    SWITCH: ['Switch', 49],
+    OUTLET: ['Outlet', 47],
+    THERMOSTAT: ['Thermostat', 43],
+    COVER: ['WindowCovering', 'Window Covering', 14],
+    LOCK: ['LockMechanism', 'Lock Mechanism', 45],
+    TEMP_SENSOR: ['TemperatureSensor', 'Temperature Sensor', 10],
+    HUMIDITY_SENSOR: ['HumiditySensor', 'Humidity Sensor', 82],
+    CONTACT_SENSOR: ['ContactSensor', 'Contact Sensor', 80],
+    MOTION_SENSOR: ['MotionSensor', 'Motion Sensor', 85],
+    BUTTON: ['StatelessProgrammableSwitch', 'Stateless Programmable Switch', 89],
+  };
+
+  // Characteristic types (strings from API)
+  static CHAR_TYPES = {
+    ON: ['On', 37],
+    BRIGHTNESS: ['Brightness', 38],
+    CURRENT_TEMP: ['CurrentTemperature', 17],
+    TARGET_TEMP: ['TargetTemperature', 53],
+    CURRENT_HUMIDITY: ['CurrentRelativeHumidity', 16],
+    CURRENT_POSITION: ['CurrentPosition', 108],
+    TARGET_POSITION: ['TargetPosition', 117],
+    LOCK_CURRENT: ['LockCurrentState', 29],
+    LOCK_TARGET: ['LockTargetState', 30],
+    HEATING_COOLING_CURRENT: ['CurrentHeatingCoolingState', 15],
+    HEATING_COOLING_TARGET: ['TargetHeatingCoolingState', 51],
+    CONTACT_STATE: ['ContactSensorState', 106],
+    MOTION_DETECTED: ['MotionDetected', 34],
+    STATUS_FAULT: ['StatusFault', 77],
+    PROGRAMMABLE_SWITCH_EVENT: ['ProgrammableSwitchEvent', 115],
+  };
 
   // ============================================================
   // Static Helper Methods
@@ -163,15 +201,22 @@ class SprutHubClient {
   }
 
   /**
+   * Get characteristic type (handles both char.type and char.control.type)
+   * @param {SprutHubCharacteristic} char
+   * @returns {string|number|undefined}
+   */
+  static getCharacteristicType(char) {
+    return char.type ?? char.control?.type;
+  }
+
+  /**
    * Check if characteristic is an On characteristic
    * @param {SprutHubCharacteristic} char
    * @returns {boolean}
    */
   static isOnCharacteristic(char) {
-    return (
-      char.type === SprutHubClient.CHAR_ON ||
-      SprutHubClient.CHAR_ON_NAMES.includes(String(char.type))
-    );
+    const type = SprutHubClient.getCharacteristicType(char);
+    return type === SprutHubClient.CHAR_ON || SprutHubClient.CHAR_ON_NAMES.includes(String(type));
   }
 
   /**
@@ -180,9 +225,10 @@ class SprutHubClient {
    * @returns {boolean}
    */
   static isBrightnessCharacteristic(char) {
+    const type = SprutHubClient.getCharacteristicType(char);
     return (
-      char.type === SprutHubClient.CHAR_BRIGHTNESS ||
-      SprutHubClient.CHAR_BRIGHTNESS_NAMES.includes(String(char.type))
+      type === SprutHubClient.CHAR_BRIGHTNESS ||
+      SprutHubClient.CHAR_BRIGHTNESS_NAMES.includes(String(type))
     );
   }
 
@@ -221,6 +267,400 @@ class SprutHubClient {
    */
   static findBrightnessCharacteristic(service) {
     return service.characteristics?.find(SprutHubClient.isBrightnessCharacteristic);
+  }
+
+  // ============================================================
+  // Static Helper Methods - Service Type Checks
+  // ============================================================
+
+  /**
+   * Check if value matches any of the given types (supports strings and numbers)
+   * @param {number|string} value - Service or characteristic type
+   * @param {(string|number)[]} types - Array of possible type values
+   * @returns {boolean}
+   */
+  static matchesType(value, types) {
+    return types.includes(value) || types.includes(String(value)) || types.includes(Number(value));
+  }
+
+  /**
+   * Check if service is a Switch service
+   * @param {SprutHubService} service
+   * @returns {boolean}
+   */
+  static isSwitchService(service) {
+    return SprutHubClient.matchesType(service.type, SprutHubClient.SERVICE_TYPES.SWITCH);
+  }
+
+  /**
+   * Check if service is an Outlet service
+   * @param {SprutHubService} service
+   * @returns {boolean}
+   */
+  static isOutletService(service) {
+    return SprutHubClient.matchesType(service.type, SprutHubClient.SERVICE_TYPES.OUTLET);
+  }
+
+  /**
+   * Check if service is a Thermostat service
+   * @param {SprutHubService} service
+   * @returns {boolean}
+   */
+  static isThermostatService(service) {
+    return SprutHubClient.matchesType(service.type, SprutHubClient.SERVICE_TYPES.THERMOSTAT);
+  }
+
+  /**
+   * Check if service is a WindowCovering service
+   * @param {SprutHubService} service
+   * @returns {boolean}
+   */
+  static isCoverService(service) {
+    return SprutHubClient.matchesType(service.type, SprutHubClient.SERVICE_TYPES.COVER);
+  }
+
+  /**
+   * Check if service is a Lock service
+   * @param {SprutHubService} service
+   * @returns {boolean}
+   */
+  static isLockService(service) {
+    return SprutHubClient.matchesType(service.type, SprutHubClient.SERVICE_TYPES.LOCK);
+  }
+
+  /**
+   * Check if service is a Temperature Sensor service
+   * @param {SprutHubService} service
+   * @returns {boolean}
+   */
+  static isTempSensorService(service) {
+    return SprutHubClient.matchesType(service.type, SprutHubClient.SERVICE_TYPES.TEMP_SENSOR);
+  }
+
+  /**
+   * Check if service is a Humidity Sensor service
+   * @param {SprutHubService} service
+   * @returns {boolean}
+   */
+  static isHumiditySensorService(service) {
+    return SprutHubClient.matchesType(service.type, SprutHubClient.SERVICE_TYPES.HUMIDITY_SENSOR);
+  }
+
+  /**
+   * Check if service is a Contact Sensor service
+   * @param {SprutHubService} service
+   * @returns {boolean}
+   */
+  static isContactSensorService(service) {
+    return SprutHubClient.matchesType(service.type, SprutHubClient.SERVICE_TYPES.CONTACT_SENSOR);
+  }
+
+  /**
+   * Check if service is a Motion Sensor service
+   * @param {SprutHubService} service
+   * @returns {boolean}
+   */
+  static isMotionSensorService(service) {
+    return SprutHubClient.matchesType(service.type, SprutHubClient.SERVICE_TYPES.MOTION_SENSOR);
+  }
+
+  /**
+   * Check if service is a Button (StatelessProgrammableSwitch) service
+   * @param {SprutHubService} service
+   * @returns {boolean}
+   */
+  static isButtonService(service) {
+    return SprutHubClient.matchesType(service.type, SprutHubClient.SERVICE_TYPES.BUTTON);
+  }
+
+  /**
+   * Check if service is any type of sensor
+   * @param {SprutHubService} service
+   * @returns {boolean}
+   */
+  static isSensorService(service) {
+    return (
+      SprutHubClient.isTempSensorService(service) ||
+      SprutHubClient.isHumiditySensorService(service) ||
+      SprutHubClient.isContactSensorService(service) ||
+      SprutHubClient.isMotionSensorService(service)
+    );
+  }
+
+  /**
+   * Get sensor type name from service
+   * @param {SprutHubService} service
+   * @returns {'temperature'|'humidity'|'contact'|'motion'|null}
+   */
+  static getSensorType(service) {
+    if (SprutHubClient.isTempSensorService(service)) return 'temperature';
+    if (SprutHubClient.isHumiditySensorService(service)) return 'humidity';
+    if (SprutHubClient.isContactSensorService(service)) return 'contact';
+    if (SprutHubClient.isMotionSensorService(service)) return 'motion';
+    return null;
+  }
+
+  // ============================================================
+  // Static Helper Methods - Find Services
+  // ============================================================
+
+  /**
+   * Find Switch service in accessory
+   * @param {SprutHubAccessory} accessory
+   * @returns {SprutHubService|undefined}
+   */
+  static findSwitchService(accessory) {
+    return accessory.services?.find(SprutHubClient.isSwitchService);
+  }
+
+  /**
+   * Find Outlet service in accessory
+   * @param {SprutHubAccessory} accessory
+   * @returns {SprutHubService|undefined}
+   */
+  static findOutletService(accessory) {
+    return accessory.services?.find(SprutHubClient.isOutletService);
+  }
+
+  /**
+   * Find Thermostat service in accessory
+   * @param {SprutHubAccessory} accessory
+   * @returns {SprutHubService|undefined}
+   */
+  static findThermostatService(accessory) {
+    return accessory.services?.find(SprutHubClient.isThermostatService);
+  }
+
+  /**
+   * Find Cover service in accessory
+   * @param {SprutHubAccessory} accessory
+   * @returns {SprutHubService|undefined}
+   */
+  static findCoverService(accessory) {
+    return accessory.services?.find(SprutHubClient.isCoverService);
+  }
+
+  /**
+   * Find Lock service in accessory
+   * @param {SprutHubAccessory} accessory
+   * @returns {SprutHubService|undefined}
+   */
+  static findLockService(accessory) {
+    return accessory.services?.find(SprutHubClient.isLockService);
+  }
+
+  /**
+   * Find any sensor service in accessory
+   * @param {SprutHubAccessory} accessory
+   * @returns {SprutHubService|undefined}
+   */
+  static findSensorService(accessory) {
+    return accessory.services?.find(SprutHubClient.isSensorService);
+  }
+
+  /**
+   * Find Button (StatelessProgrammableSwitch) service in accessory
+   * @param {SprutHubAccessory} accessory
+   * @returns {SprutHubService|undefined}
+   */
+  static findButtonService(accessory) {
+    return accessory.services?.find(SprutHubClient.isButtonService);
+  }
+
+  // ============================================================
+  // Static Helper Methods - Find Characteristics
+  // ============================================================
+
+  /**
+   * Find characteristic by type in service
+   * @param {SprutHubService} service
+   * @param {(string|number)[]} types - Characteristic type values to match
+   * @returns {SprutHubCharacteristic|undefined}
+   */
+  static findCharacteristicByType(service, types) {
+    // Type can be at c.type (old format) or c.control.type (Sprut.Hub format)
+    return service.characteristics?.find((c) => {
+      const charType = c.type ?? c.control?.type;
+      return charType !== undefined && SprutHubClient.matchesType(charType, types);
+    });
+  }
+
+  /**
+   * Find CurrentTemperature characteristic in service
+   * @param {SprutHubService} service
+   * @returns {SprutHubCharacteristic|undefined}
+   */
+  static findCurrentTempCharacteristic(service) {
+    return SprutHubClient.findCharacteristicByType(service, SprutHubClient.CHAR_TYPES.CURRENT_TEMP);
+  }
+
+  /**
+   * Find TargetTemperature characteristic in service
+   * @param {SprutHubService} service
+   * @returns {SprutHubCharacteristic|undefined}
+   */
+  static findTargetTempCharacteristic(service) {
+    return SprutHubClient.findCharacteristicByType(service, SprutHubClient.CHAR_TYPES.TARGET_TEMP);
+  }
+
+  /**
+   * Find CurrentRelativeHumidity characteristic in service
+   * @param {SprutHubService} service
+   * @returns {SprutHubCharacteristic|undefined}
+   */
+  static findCurrentHumidityCharacteristic(service) {
+    return SprutHubClient.findCharacteristicByType(
+      service,
+      SprutHubClient.CHAR_TYPES.CURRENT_HUMIDITY
+    );
+  }
+
+  /**
+   * Find CurrentPosition characteristic in service
+   * @param {SprutHubService} service
+   * @returns {SprutHubCharacteristic|undefined}
+   */
+  static findCurrentPositionCharacteristic(service) {
+    return SprutHubClient.findCharacteristicByType(
+      service,
+      SprutHubClient.CHAR_TYPES.CURRENT_POSITION
+    );
+  }
+
+  /**
+   * Find TargetPosition characteristic in service
+   * @param {SprutHubService} service
+   * @returns {SprutHubCharacteristic|undefined}
+   */
+  static findTargetPositionCharacteristic(service) {
+    return SprutHubClient.findCharacteristicByType(
+      service,
+      SprutHubClient.CHAR_TYPES.TARGET_POSITION
+    );
+  }
+
+  /**
+   * Find LockCurrentState characteristic in service
+   * @param {SprutHubService} service
+   * @returns {SprutHubCharacteristic|undefined}
+   */
+  static findLockCurrentStateCharacteristic(service) {
+    return SprutHubClient.findCharacteristicByType(service, SprutHubClient.CHAR_TYPES.LOCK_CURRENT);
+  }
+
+  /**
+   * Find LockTargetState characteristic in service
+   * @param {SprutHubService} service
+   * @returns {SprutHubCharacteristic|undefined}
+   */
+  static findLockTargetStateCharacteristic(service) {
+    return SprutHubClient.findCharacteristicByType(service, SprutHubClient.CHAR_TYPES.LOCK_TARGET);
+  }
+
+  /**
+   * Find CurrentHeatingCoolingState characteristic in service
+   * @param {SprutHubService} service
+   * @returns {SprutHubCharacteristic|undefined}
+   */
+  static findHeatingCoolingCurrentCharacteristic(service) {
+    return SprutHubClient.findCharacteristicByType(
+      service,
+      SprutHubClient.CHAR_TYPES.HEATING_COOLING_CURRENT
+    );
+  }
+
+  /**
+   * Find TargetHeatingCoolingState characteristic in service
+   * @param {SprutHubService} service
+   * @returns {SprutHubCharacteristic|undefined}
+   */
+  static findHeatingCoolingTargetCharacteristic(service) {
+    return SprutHubClient.findCharacteristicByType(
+      service,
+      SprutHubClient.CHAR_TYPES.HEATING_COOLING_TARGET
+    );
+  }
+
+  /**
+   * Find ContactSensorState characteristic in service
+   * @param {SprutHubService} service
+   * @returns {SprutHubCharacteristic|undefined}
+   */
+  static findContactStateCharacteristic(service) {
+    return SprutHubClient.findCharacteristicByType(
+      service,
+      SprutHubClient.CHAR_TYPES.CONTACT_STATE
+    );
+  }
+
+  /**
+   * Find MotionDetected characteristic in service
+   * @param {SprutHubService} service
+   * @returns {SprutHubCharacteristic|undefined}
+   */
+  static findMotionDetectedCharacteristic(service) {
+    return SprutHubClient.findCharacteristicByType(
+      service,
+      SprutHubClient.CHAR_TYPES.MOTION_DETECTED
+    );
+  }
+
+  /**
+   * Find StatusFault characteristic in service
+   * @param {SprutHubService} service
+   * @returns {SprutHubCharacteristic|undefined}
+   */
+  static findStatusFaultCharacteristic(service) {
+    return SprutHubClient.findCharacteristicByType(service, SprutHubClient.CHAR_TYPES.STATUS_FAULT);
+  }
+
+  /**
+   * Find ProgrammableSwitchEvent characteristic in service (for buttons)
+   * @param {SprutHubService} service
+   * @returns {SprutHubCharacteristic|undefined}
+   */
+  static findProgrammableSwitchEventCharacteristic(service) {
+    return SprutHubClient.findCharacteristicByType(
+      service,
+      SprutHubClient.CHAR_TYPES.PROGRAMMABLE_SWITCH_EVENT
+    );
+  }
+
+  /**
+   * Check if service has a fault (device offline/unreachable)
+   * @param {SprutHubService} service
+   * @returns {boolean}
+   */
+  static isServiceFaulted(service) {
+    const faultChar = SprutHubClient.findStatusFaultCharacteristic(service);
+    if (!faultChar) return false;
+    const value = SprutHubClient.extractValue(faultChar.control?.value);
+    // StatusFault: 0 = No Fault, 1 = General Fault (often means offline)
+    return value === 1 || value === true;
+  }
+
+  /**
+   * Check if accessory is offline/unreachable
+   * Checks accessory-level reachable property and all services for StatusFault
+   * @param {SprutHubAccessory} accessory
+   * @returns {boolean}
+   */
+  static isAccessoryOffline(accessory) {
+    // Check accessory-level online property (from Sprut.Hub API)
+    if (accessory.online === false) return true;
+    // Fallback checks
+    if (accessory.reachable === false) return true;
+    if (accessory.status === 'offline' || accessory.status === 'unreachable') return true;
+
+    // Check all services for StatusFault
+    if (accessory.services) {
+      for (const service of accessory.services) {
+        if (SprutHubClient.isServiceFaulted(service)) {
+          return true;
+        }
+      }
+    }
+    return false;
   }
 
   /**
@@ -598,7 +1038,13 @@ class SprutHubClient {
     if (typeof value === 'boolean') {
       formattedValue = { boolValue: value };
     } else if (typeof value === 'number') {
-      formattedValue = { doubleValue: value };
+      // Use intValue for integers (lock states, cover positions, thermostat modes)
+      // Use doubleValue for floats (temperature, brightness percentage)
+      if (Number.isInteger(value)) {
+        formattedValue = { intValue: value };
+      } else {
+        formattedValue = { doubleValue: value };
+      }
     } else if (typeof value === 'string') {
       formattedValue = { stringValue: value };
     } else {

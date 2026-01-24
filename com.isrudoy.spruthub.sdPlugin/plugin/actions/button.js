@@ -1,10 +1,11 @@
 /**
- * Light Action for Sprut.Hub Plugin
- * @module actions/light
+ * Button Action for Sprut.Hub Plugin
+ * Controls StatelessProgrammableSwitch devices (doorbell buttons, Aqara buttons, etc.)
+ * @module actions/button
  */
 
 const { createCanvas } = require('canvas');
-const { log, LIGHT_ACTION, CANVAS_SIZE, CANVAS_CENTER, LAYOUT, COLORS } = require('../lib/common');
+const { log, BUTTON_ACTION, CANVAS_SIZE, CANVAS_CENTER, LAYOUT, COLORS } = require('../lib/common');
 const { contexts, setContext, getContext, deleteContext, stopTimer } = require('../lib/state');
 const { setImage, sendToPropertyInspector } = require('../lib/websocket');
 const {
@@ -26,27 +27,40 @@ const {
  */
 
 /**
- * @typedef {Object} LightSettings
+ * @typedef {Object} ButtonSettings
  * @property {string} [host] - Hub hostname
  * @property {string} [token] - Auth token
  * @property {string} [serial] - Hub serial
- * @property {number} [accessoryId] - Selected light accessory ID
+ * @property {number} [accessoryId] - Selected button accessory ID
  * @property {string} [accessoryName] - Accessory display name
- * @property {number} [serviceId] - Actual lightbulb service ID (sId)
- * @property {string} [serviceName] - Service display name (for multi-bulb accessories)
- * @property {number} [characteristicId] - Actual On characteristic ID (cId)
- * @property {string} [customName] - Custom display name (overrides auto name)
- * @property {string} [action] - toggle | on | off
+ * @property {number} [serviceId] - Actual button service ID (sId)
+ * @property {string} [serviceName] - Service display name
+ * @property {number} [characteristicId] - ProgrammableSwitchEvent characteristic ID (cId)
+ * @property {string} [customName] - Custom display name
+ * @property {number} [pressType] - Press type: 0=single, 1=double, 2=long
  */
 
 /**
- * @typedef {Object} LightState
- * @property {boolean} on - Whether light is on
- * @property {number} [brightness] - Brightness level (0-100)
+ * @typedef {Object} ButtonState
+ * @property {boolean} ready - Whether button is ready
  * @property {string} [error] - Error message
  * @property {boolean} [connecting] - Whether connecting to hub
- * @property {boolean} [offline] - Whether device is offline/unreachable
+ * @property {boolean} [offline] - Whether device is offline
+ * @property {boolean} [pressed] - Temporary pressed state for feedback
  */
+
+// Press type constants
+const PRESS_SINGLE = 0;
+const PRESS_DOUBLE = 1;
+const PRESS_LONG = 2;
+
+// Press type names
+/** @type {Record<number, string>} */
+const PRESS_NAMES = {
+  [PRESS_SINGLE]: 'Single',
+  [PRESS_DOUBLE]: 'Double',
+  [PRESS_LONG]: 'Long',
+};
 
 // ============================================================
 // State Listener
@@ -66,7 +80,6 @@ function setupStateListener() {
   const client = getCurrentClient();
   if (!client) return;
 
-  // Reset if client changed (reconnected with different settings)
   if (listenerClient !== client) {
     stateListenerSetup = false;
     listenerClient = client;
@@ -74,42 +87,8 @@ function setupStateListener() {
 
   if (stateListenerSetup) return;
 
-  client.on('stateChange', (change) => {
-    const { accessoryId, characteristicId, value } =
-      /** @type {import('../lib/spruthub').StateChange} */ (change);
-
-    // Extract actual value from wrapper
-    const actualValue = SprutHubClient.extractValue(value);
-
-    // Find all light buttons with this accessoryId
-    Object.entries(contexts).forEach(([context, data]) => {
-      // Only process light action contexts
-      if (data.action !== LIGHT_ACTION) return;
-
-      /** @type {LightSettings} */
-      const settings = /** @type {LightSettings} */ (data.settings || {});
-      if (settings.accessoryId === accessoryId) {
-        // Update state based on characteristic
-        if (!data.state) {
-          data.state = { on: false };
-        }
-
-        // Match by stored characteristicId (On) or by type constants
-        if (
-          settings.characteristicId === characteristicId ||
-          characteristicId === SprutHubClient.CHAR_ON
-        ) {
-          data.state.on = Boolean(actualValue);
-        } else if (characteristicId === SprutHubClient.CHAR_BRIGHTNESS) {
-          data.state.brightness = Number(actualValue);
-        }
-
-        // Update button
-        updateButton(context, settings, /** @type {LightState} */ (data.state));
-      }
-    });
-  });
-
+  // Buttons don't have state changes to listen to - they only send events
+  // But we still set up the listener for connection monitoring
   stateListenerSetup = true;
 }
 
@@ -118,86 +97,113 @@ function setupStateListener() {
 // ============================================================
 
 /**
- * Draw lightbulb icon
+ * Draw button icon (circular button shape)
  * @param {import('canvas').CanvasRenderingContext2D} ctx - Canvas context
  * @param {number} x - Center X
  * @param {number} y - Center Y
  * @param {number} size - Icon size
  * @param {string} color - Fill color
+ * @param {boolean} pressed - Whether button appears pressed
  * @returns {void}
  */
-function drawLightbulb(ctx, x, y, size, color) {
-  const bulbRadius = size * 0.35;
-  const baseWidth = size * 0.35;
-  const baseHeight = size * 0.2;
+function drawButtonIcon(ctx, x, y, size, color, pressed) {
+  const outerRadius = size * 0.35;
+  const innerRadius = size * 0.25;
 
-  ctx.fillStyle = color;
-
-  // Bulb (circle)
+  // Outer ring
+  ctx.strokeStyle = color;
+  ctx.lineWidth = 3;
   ctx.beginPath();
-  ctx.arc(x, y - size * 0.1, bulbRadius, 0, Math.PI * 2);
-  ctx.fill();
+  ctx.arc(x, y, outerRadius, 0, Math.PI * 2);
+  ctx.stroke();
 
-  // Base (rectangle with rounded bottom)
-  const baseY = y + bulbRadius * 0.5;
-  ctx.fillRect(x - baseWidth / 2, baseY, baseWidth, baseHeight);
-
-  // Base lines
-  ctx.strokeStyle = COLORS.background;
-  ctx.lineWidth = 2;
-  for (let i = 1; i <= 2; i++) {
-    const ly = baseY + (baseHeight / 3) * i;
+  // Inner circle (filled when pressed)
+  if (pressed) {
+    ctx.fillStyle = color;
     ctx.beginPath();
-    ctx.moveTo(x - baseWidth / 2, ly);
-    ctx.lineTo(x + baseWidth / 2, ly);
+    ctx.arc(x, y, innerRadius, 0, Math.PI * 2);
+    ctx.fill();
+  } else {
+    ctx.strokeStyle = color;
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.arc(x, y, innerRadius, 0, Math.PI * 2);
     ctx.stroke();
   }
-
-  // Tip
-  ctx.fillStyle = color;
-  ctx.beginPath();
-  ctx.moveTo(x - baseWidth / 4, baseY + baseHeight);
-  ctx.lineTo(x + baseWidth / 4, baseY + baseHeight);
-  ctx.lineTo(x, baseY + baseHeight + size * 0.08);
-  ctx.closePath();
-  ctx.fill();
 }
 
 /**
- * Draw light button - On state
- * @param {string} name - Light name
- * @param {number} [brightness] - Brightness level
+ * Draw button - Ready state
+ * @param {string} name - Button name
+ * @param {number} pressType - Press type for display
  * @returns {string} Base64 PNG data URL
  */
-function drawLightOn(name, brightness) {
+function drawButtonReady(name, pressType) {
   const canvas = createCanvas(CANVAS_SIZE, CANVAS_SIZE);
   const ctx = canvas.getContext('2d');
 
-  // Black background
   ctx.fillStyle = COLORS.background;
   ctx.fillRect(0, 0, CANVAS_SIZE, CANVAS_SIZE);
 
-  // Lightbulb icon (warm yellow)
-  drawLightbulb(ctx, CANVAS_CENTER, LAYOUT.bulbY, LAYOUT.bulbSize, COLORS.warmYellow);
+  // Button icon
+  drawButtonIcon(ctx, CANVAS_CENTER, LAYOUT.bulbY, LAYOUT.bulbSize, COLORS.white, false);
 
-  // Name (bottom)
+  // Name
   ctx.fillStyle = COLORS.white;
   ctx.font = 'bold 18px sans-serif';
   ctx.textAlign = 'center';
-  let displayName = name || 'Light';
+  let displayName = name || 'Button';
   if (displayName.length > 12) {
     displayName = displayName.substring(0, 11) + '…';
   }
   ctx.fillText(displayName, CANVAS_CENTER, LAYOUT.nameY);
 
-  // Brightness (if available)
-  if (brightness !== undefined) {
-    ctx.fillStyle = COLORS.warmYellow;
-    ctx.font = 'bold 16px sans-serif';
-    ctx.fillText(brightness + '%', CANVAS_CENTER, LAYOUT.brightnessY);
-  }
+  // Press type
+  ctx.fillStyle = COLORS.gray;
+  ctx.font = 'bold 16px sans-serif';
+  const pressName = PRESS_NAMES[pressType] || 'Single';
+  ctx.fillText(pressName, CANVAS_CENTER, LAYOUT.brightnessY);
 
-  // Status indicator line at bottom
+  // Status bar
+  ctx.fillStyle = COLORS.gray;
+  ctx.fillRect(0, LAYOUT.statusBarY, CANVAS_SIZE, LAYOUT.statusBarHeight);
+
+  return canvas.toDataURL('image/png');
+}
+
+/**
+ * Draw button - Pressed state (visual feedback)
+ * @param {string} name - Button name
+ * @param {number} pressType - Press type for display
+ * @returns {string} Base64 PNG data URL
+ */
+function drawButtonPressed(name, pressType) {
+  const canvas = createCanvas(CANVAS_SIZE, CANVAS_SIZE);
+  const ctx = canvas.getContext('2d');
+
+  ctx.fillStyle = COLORS.background;
+  ctx.fillRect(0, 0, CANVAS_SIZE, CANVAS_SIZE);
+
+  // Button icon (pressed)
+  drawButtonIcon(ctx, CANVAS_CENTER, LAYOUT.bulbY, LAYOUT.bulbSize, COLORS.warmYellow, true);
+
+  // Name
+  ctx.fillStyle = COLORS.white;
+  ctx.font = 'bold 18px sans-serif';
+  ctx.textAlign = 'center';
+  let displayName = name || 'Button';
+  if (displayName.length > 12) {
+    displayName = displayName.substring(0, 11) + '…';
+  }
+  ctx.fillText(displayName, CANVAS_CENTER, LAYOUT.nameY);
+
+  // Press type
+  ctx.fillStyle = COLORS.warmYellow;
+  ctx.font = 'bold 16px sans-serif';
+  const pressName = PRESS_NAMES[pressType] || 'Single';
+  ctx.fillText(pressName, CANVAS_CENTER, LAYOUT.brightnessY);
+
+  // Status bar
   ctx.fillStyle = COLORS.warmYellow;
   ctx.fillRect(0, LAYOUT.statusBarY, CANVAS_SIZE, LAYOUT.statusBarHeight);
 
@@ -205,40 +211,7 @@ function drawLightOn(name, brightness) {
 }
 
 /**
- * Draw light button - Off state
- * @param {string} name - Light name
- * @returns {string} Base64 PNG data URL
- */
-function drawLightOff(name) {
-  const canvas = createCanvas(CANVAS_SIZE, CANVAS_SIZE);
-  const ctx = canvas.getContext('2d');
-
-  // Black background
-  ctx.fillStyle = COLORS.background;
-  ctx.fillRect(0, 0, CANVAS_SIZE, CANVAS_SIZE);
-
-  // Lightbulb icon (gray)
-  drawLightbulb(ctx, CANVAS_CENTER, LAYOUT.bulbY, LAYOUT.bulbSize, COLORS.gray);
-
-  // Name (bottom)
-  ctx.fillStyle = COLORS.gray;
-  ctx.font = 'bold 18px sans-serif';
-  ctx.textAlign = 'center';
-  let displayName = name || 'Light';
-  if (displayName.length > 12) {
-    displayName = displayName.substring(0, 11) + '…';
-  }
-  ctx.fillText(displayName, CANVAS_CENTER, LAYOUT.nameYOff);
-
-  // Status indicator line at bottom
-  ctx.fillStyle = '#444444';
-  ctx.fillRect(0, LAYOUT.statusBarY, CANVAS_SIZE, LAYOUT.statusBarHeight);
-
-  return canvas.toDataURL('image/png');
-}
-
-/**
- * Draw light button - Error state
+ * Draw button - Error state
  * @param {string} message - Error message
  * @returns {string} Base64 PNG data URL
  */
@@ -246,17 +219,14 @@ function drawError(message) {
   const canvas = createCanvas(CANVAS_SIZE, CANVAS_SIZE);
   const ctx = canvas.getContext('2d');
 
-  // Dark red background
   ctx.fillStyle = '#3d1a1a';
   ctx.fillRect(0, 0, CANVAS_SIZE, CANVAS_SIZE);
 
-  // Error icon (!)
   ctx.fillStyle = COLORS.red;
   ctx.font = 'bold 48px sans-serif';
   ctx.textAlign = 'center';
   ctx.fillText('!', CANVAS_CENTER, 65);
 
-  // Error message
   ctx.fillStyle = COLORS.white;
   ctx.font = 'bold 14px sans-serif';
   let displayMessage = message || 'Error';
@@ -265,7 +235,6 @@ function drawError(message) {
   }
   ctx.fillText(displayMessage, CANVAS_CENTER, 100);
 
-  // Status indicator line at bottom
   ctx.fillStyle = COLORS.red;
   ctx.fillRect(0, LAYOUT.statusBarY, CANVAS_SIZE, LAYOUT.statusBarHeight);
 
@@ -273,27 +242,23 @@ function drawError(message) {
 }
 
 /**
- * Draw light button - Connecting state
+ * Draw button - Connecting state
  * @returns {string} Base64 PNG data URL
  */
 function drawConnecting() {
   const canvas = createCanvas(CANVAS_SIZE, CANVAS_SIZE);
   const ctx = canvas.getContext('2d');
 
-  // Black background
   ctx.fillStyle = COLORS.background;
   ctx.fillRect(0, 0, CANVAS_SIZE, CANVAS_SIZE);
 
-  // Lightbulb icon (yellow)
-  drawLightbulb(ctx, CANVAS_CENTER, LAYOUT.bulbY, LAYOUT.bulbSize, COLORS.yellow);
+  drawButtonIcon(ctx, CANVAS_CENTER, LAYOUT.bulbY, LAYOUT.bulbSize, COLORS.yellow, false);
 
-  // "Connecting..." text
   ctx.fillStyle = COLORS.yellow;
   ctx.font = 'bold 16px sans-serif';
   ctx.textAlign = 'center';
   ctx.fillText('Connecting...', CANVAS_CENTER, LAYOUT.nameYOff);
 
-  // Status indicator line at bottom
   ctx.fillStyle = COLORS.yellow;
   ctx.fillRect(0, LAYOUT.statusBarY, CANVAS_SIZE, LAYOUT.statusBarHeight);
 
@@ -301,27 +266,23 @@ function drawConnecting() {
 }
 
 /**
- * Draw light button - Not configured state
+ * Draw button - Not configured state
  * @returns {string} Base64 PNG data URL
  */
 function drawNotConfigured() {
   const canvas = createCanvas(CANVAS_SIZE, CANVAS_SIZE);
   const ctx = canvas.getContext('2d');
 
-  // Dark blue background
   ctx.fillStyle = '#1a1a2e';
   ctx.fillRect(0, 0, CANVAS_SIZE, CANVAS_SIZE);
 
-  // Lightbulb icon (gray)
-  drawLightbulb(ctx, CANVAS_CENTER, 50, LAYOUT.bulbSizeSmall, COLORS.gray);
+  drawButtonIcon(ctx, CANVAS_CENTER, 45, 50, COLORS.gray, false);
 
-  // "Setup" text
   ctx.fillStyle = COLORS.white;
   ctx.font = 'bold 20px sans-serif';
   ctx.textAlign = 'center';
   ctx.fillText('Setup', CANVAS_CENTER, 110);
 
-  // Subtitle
   ctx.fillStyle = COLORS.gray;
   ctx.font = '14px sans-serif';
   ctx.fillText('Open settings', CANVAS_CENTER, 130);
@@ -330,37 +291,35 @@ function drawNotConfigured() {
 }
 
 /**
- * Draw light button - Offline state
- * @param {string} name - Light name
+ * Draw button - Offline state
+ * @param {string} name - Button name
  * @returns {string} Base64 PNG data URL
  */
 function drawOffline(name) {
   const canvas = createCanvas(CANVAS_SIZE, CANVAS_SIZE);
   const ctx = canvas.getContext('2d');
 
-  // Dark background
   ctx.fillStyle = COLORS.background;
   ctx.fillRect(0, 0, CANVAS_SIZE, CANVAS_SIZE);
 
-  // Lightbulb icon (red/unavailable color)
-  drawLightbulb(ctx, CANVAS_CENTER, LAYOUT.bulbY, LAYOUT.bulbSize, COLORS.unavailable);
+  drawButtonIcon(ctx, CANVAS_CENTER, LAYOUT.bulbY, LAYOUT.bulbSize, COLORS.unavailable, false);
 
   // Name
   ctx.fillStyle = COLORS.unavailable;
   ctx.font = 'bold 18px sans-serif';
   ctx.textAlign = 'center';
-  let displayName = name || 'Light';
+  let displayName = name || 'Button';
   if (displayName.length > 12) {
     displayName = displayName.substring(0, 11) + '…';
   }
   ctx.fillText(displayName, CANVAS_CENTER, LAYOUT.nameY);
 
-  // "Offline" text
+  // Offline status
   ctx.fillStyle = COLORS.unavailable;
   ctx.font = 'bold 16px sans-serif';
   ctx.fillText('Offline', CANVAS_CENTER, LAYOUT.brightnessY);
 
-  // Status indicator line at bottom
+  // Status bar
   ctx.fillStyle = COLORS.unavailable;
   ctx.fillRect(0, LAYOUT.statusBarY, CANVAS_SIZE, LAYOUT.statusBarHeight);
 
@@ -373,27 +332,24 @@ function drawOffline(name) {
 
 /**
  * Get display name for button
- * Priority: customName > serviceName (if different) > accessoryName
- * @param {LightSettings} settings
+ * @param {ButtonSettings} settings
  * @returns {string}
  */
 function getDisplayName(settings) {
-  // Custom name has highest priority
   if (settings.customName) {
     return settings.customName;
   }
-  // If serviceName exists and is different from accessoryName, use it
   if (settings.serviceName && settings.serviceName !== settings.accessoryName) {
     return settings.serviceName;
   }
-  return settings.accessoryName || 'Light';
+  return settings.accessoryName || 'Button';
 }
 
 /**
  * Update button image
  * @param {string} context - Action context
- * @param {LightSettings} settings - Light settings
- * @param {LightState} [state] - Current state
+ * @param {ButtonSettings} settings - Button settings
+ * @param {ButtonState} [state] - Current state
  * @returns {void}
  */
 function updateButton(context, settings, state) {
@@ -403,43 +359,42 @@ function updateButton(context, settings, state) {
     imageData = drawError(state.error);
   } else if (state?.connecting) {
     imageData = drawConnecting();
-  } else if (!settings.host || !settings.token || !settings.serial || !settings.accessoryId) {
-    imageData = drawNotConfigured();
   } else if (state?.offline) {
     imageData = drawOffline(getDisplayName(settings));
-  } else if (state?.on) {
-    imageData = drawLightOn(getDisplayName(settings), state.brightness);
+  } else if (!settings.host || !settings.token || !settings.serial || !settings.accessoryId) {
+    imageData = drawNotConfigured();
+  } else if (state?.pressed) {
+    imageData = drawButtonPressed(getDisplayName(settings), settings.pressType ?? PRESS_SINGLE);
   } else {
-    imageData = drawLightOff(getDisplayName(settings));
+    imageData = drawButtonReady(getDisplayName(settings), settings.pressType ?? PRESS_SINGLE);
   }
 
   setImage(context, imageData);
 }
 
 // ============================================================
-// Light State Fetch
+// Button State Fetch
 // ============================================================
 
 /**
- * Fetch current light state from hub
- * @param {LightSettings} settings - Light settings
- * @returns {Promise<LightState>}
+ * Fetch current button state from hub
+ * @param {ButtonSettings} settings - Button settings
+ * @returns {Promise<ButtonState>}
  */
-async function fetchLightState(settings) {
+async function fetchButtonState(settings) {
   const { host, token, serial, accessoryId, serviceId } = settings;
 
   if (!host || !token || !serial || !accessoryId) {
-    return { on: false, error: 'Not configured' };
+    return { ready: false, error: 'Not configured' };
   }
 
   try {
     const client = getClient(host, token, serial);
 
     if (!client) {
-      return { on: false, error: 'Missing connection parameters' };
+      return { ready: false, error: 'Missing connection parameters' };
     }
 
-    // Use waitForConnection instead of manual event handling
     await client.waitForConnection();
 
     setupStateListener();
@@ -448,38 +403,30 @@ async function fetchLightState(settings) {
     const accessory = accessories.find((a) => a.id === accessoryId);
 
     if (!accessory) {
-      return { on: false, error: 'Light not found' };
+      return { ready: false, error: 'Button not found' };
     }
 
-    // Find lightbulb service by stored serviceId or by type
+    // Check offline status
+    const isOffline = SprutHubClient.isAccessoryOffline(accessory);
+
     const service = serviceId
       ? accessory.services?.find((s) => s.sId === serviceId)
-      : SprutHubClient.findLightbulbService(accessory);
+      : SprutHubClient.findButtonService(accessory);
 
     if (!service) {
-      return { on: false, error: 'No lightbulb service' };
+      return { ready: false, error: 'No button service' };
     }
 
-    // Check if device is offline
-    const isOffline = SprutHubClient.isAccessoryOffline(accessory);
-    log('[Light] Accessory online status:', { online: accessory.online, isOffline });
-
-    // Get characteristics
-    const onChar = SprutHubClient.findOnCharacteristic(service);
-    const brightnessChar = SprutHubClient.findBrightnessCharacteristic(service);
-
-    // Extract value from the nested structure (can be boolValue, doubleValue, etc.)
-    const onValue = SprutHubClient.extractValue(onChar?.control?.value);
-    const brightnessValue = SprutHubClient.extractValue(brightnessChar?.control?.value);
-
     return {
-      on: Boolean(onValue),
-      brightness: brightnessValue !== undefined ? Number(brightnessValue) : undefined,
+      ready: true,
       offline: isOffline,
     };
   } catch (err) {
-    log('[Light] Error fetching state:', err);
-    return { on: false, error: err instanceof Error ? err.message : 'Unknown error' };
+    log('[Button] Error fetching state:', err);
+    return {
+      ready: false,
+      error: err instanceof Error ? err.message : 'Unknown error',
+    };
   }
 }
 
@@ -494,15 +441,17 @@ async function fetchLightState(settings) {
  * @returns {void}
  */
 function onWillAppear(context, payload) {
-  /** @type {LightSettings} */
-  const settings = /** @type {LightSettings} */ (payload?.settings || {});
-  setContext(context, { settings, action: LIGHT_ACTION, state: { on: false, connecting: true } });
+  /** @type {ButtonSettings} */
+  const settings = /** @type {ButtonSettings} */ (payload?.settings || {});
+  setContext(context, {
+    settings,
+    action: BUTTON_ACTION,
+    state: { ready: false, connecting: true },
+  });
 
-  // Show connecting state
-  updateButton(context, settings, { on: false, connecting: true });
+  updateButton(context, settings, { ready: false, connecting: true });
 
-  // Fetch initial state
-  fetchLightState(settings).then((state) => {
+  fetchButtonState(settings).then((state) => {
     const ctx = getContext(context);
     if (ctx) {
       ctx.state = state;
@@ -520,7 +469,6 @@ function onWillDisappear(context) {
   stopTimer(context);
   deleteContext(context);
 
-  // Disconnect if no more contexts
   if (Object.keys(contexts).length === 0) {
     disconnectClient();
     stateListenerSetup = false;
@@ -529,62 +477,57 @@ function onWillDisappear(context) {
 }
 
 /**
- * Handle keyUp event - Toggle light
+ * Handle keyUp event - Trigger button press
  * @param {string} context - Action context
  * @param {KeyPayload} payload - Event payload
  * @returns {Promise<void>}
  */
 async function onKeyUp(context, payload) {
-  /** @type {LightSettings} */
-  const settings = /** @type {LightSettings} */ (
+  /** @type {ButtonSettings} */
+  const settings = /** @type {ButtonSettings} */ (
     payload?.settings || getContext(context)?.settings || {}
   );
-  const { host, token, serial, accessoryId, serviceId, characteristicId, action } = settings;
+  const { host, token, serial, accessoryId, serviceId, characteristicId, pressType } = settings;
 
   if (!host || !token || !serial || !accessoryId) {
-    log('[Light] onKeyUp: missing required settings');
+    log('[Button] onKeyUp: missing required settings');
     return;
   }
 
   if (!serviceId || !characteristicId) {
-    log('[Light] onKeyUp: missing serviceId or characteristicId - please reconfigure the light');
+    log('[Button] onKeyUp: missing serviceId or characteristicId');
     return;
   }
 
   try {
     const client = getClient(host, token, serial);
     if (!client || !client.isConnected()) {
-      log('[Light] onKeyUp: client not connected');
+      log('[Button] onKeyUp: client not connected');
       return;
     }
 
+    // Show pressed state for visual feedback
     const ctx = getContext(context);
-    /** @type {LightState} */
-    const currentState = /** @type {LightState} */ (ctx?.state || { on: false });
-
-    // Determine new state based on action
-    let newValue;
-    if (action === 'on') {
-      newValue = true;
-    } else if (action === 'off') {
-      newValue = false;
-    } else {
-      // toggle (default)
-      newValue = !currentState.on;
-    }
-
-    log('[Light] Toggling light:', { accessoryId, serviceId, characteristicId, newValue });
-
-    // Update characteristic using stored IDs
-    await client.updateCharacteristic(accessoryId, serviceId, characteristicId, newValue);
-
-    // Optimistic update
     if (ctx) {
-      ctx.state = { ...currentState, on: newValue };
-      updateButton(context, settings, /** @type {LightState} */ (ctx.state));
+      ctx.state = { ...ctx.state, pressed: true };
+      updateButton(context, settings, /** @type {ButtonState} */ (ctx.state));
     }
+
+    // Send the button press event
+    const eventValue = pressType ?? PRESS_SINGLE;
+    log('[Button] Triggering button press:', { accessoryId, serviceId, characteristicId, eventValue });
+    await client.updateCharacteristic(accessoryId, serviceId, characteristicId, eventValue);
+
+    // Reset to ready state after brief delay
+    setTimeout(() => {
+      const c = getContext(context);
+      if (c) {
+        c.state = { ...c.state, pressed: false };
+        updateButton(context, settings, /** @type {ButtonState} */ (c.state));
+      }
+    }, 300);
   } catch (err) {
-    log('[Light] Error toggling:', err);
+    log('[Button] Error triggering button:', err);
   }
 }
 
@@ -603,7 +546,6 @@ function onSendToPlugin(context, payload) {
   const token = typeof payload.token === 'string' ? payload.token : '';
   const serial = typeof payload.serial === 'string' ? payload.serial : '';
 
-  // Handle specific events
   if (payload.event) {
     switch (payload.event) {
       case 'testConnection':
@@ -616,8 +558,7 @@ function onSendToPlugin(context, payload) {
     }
   }
 
-  // Handle settings update from PI (when light is selected)
-  if (payload.accessoryId && payload.serviceId && payload.characteristicId) {
+  if (payload.accessoryId && payload.serviceId) {
     handleSettingsFromPI(context, payload);
     return true;
   }
@@ -632,7 +573,7 @@ function onSendToPlugin(context, payload) {
  * @returns {void}
  */
 function handleSettingsFromPI(context, payload) {
-  /** @type {LightSettings} */
+  /** @type {ButtonSettings} */
   const settings = {
     host: typeof payload.host === 'string' ? payload.host : undefined,
     token: typeof payload.token === 'string' ? payload.token : undefined,
@@ -644,37 +585,36 @@ function handleSettingsFromPI(context, payload) {
     characteristicId:
       typeof payload.characteristicId === 'number' ? payload.characteristicId : undefined,
     customName: typeof payload.customName === 'string' ? payload.customName : undefined,
-    action: typeof payload.action === 'string' ? payload.action : undefined,
+    pressType: typeof payload.pressType === 'number' ? payload.pressType : PRESS_SINGLE,
   };
 
-  log('[Light] Received settings from PI:', settings);
+  log('[Button] Received settings from PI:', settings);
 
   const ctx = getContext(context);
-  const oldSettings = /** @type {LightSettings|undefined} */ (ctx?.settings);
+  const oldSettings = /** @type {ButtonSettings|undefined} */ (ctx?.settings);
 
-  // Check if device actually changed
   const deviceChanged =
     !oldSettings ||
     oldSettings.accessoryId !== settings.accessoryId ||
     oldSettings.serviceId !== settings.serviceId;
 
-  // Update context
   if (ctx) {
     ctx.settings = settings;
   } else {
-    setContext(context, { settings, state: { on: false } });
+    setContext(context, {
+      settings,
+      state: { ready: false },
+    });
   }
 
-  // If device didn't change and we have state, just update button with existing state
   if (!deviceChanged && ctx?.state) {
-    updateButton(context, settings, /** @type {LightState} */ (ctx.state));
+    updateButton(context, settings, /** @type {ButtonState} */ (ctx.state));
     return;
   }
 
-  // Device changed or no state yet - fetch new state
-  updateButton(context, settings, { on: false, connecting: true });
+  updateButton(context, settings, { ready: false, connecting: true });
 
-  fetchLightState(settings).then((state) => {
+  fetchButtonState(settings).then((state) => {
     const c = getContext(context);
     if (c) {
       c.state = state;
@@ -691,7 +631,7 @@ function handleSettingsFromPI(context, payload) {
  * @returns {Promise<void>}
  */
 async function handleTestConnection(host, token, serial) {
-  log('[Light] handleTestConnection:', { host, token: token ? '***' : undefined, serial });
+  log('[Button] handleTestConnection:', { host, token: token ? '***' : undefined, serial });
 
   try {
     const client = getClient(host, token, serial);
@@ -709,29 +649,28 @@ async function handleTestConnection(host, token, serial) {
 
     const [rooms, accessories] = await Promise.all([client.getRooms(), client.getAccessories()]);
 
-    log('[Light] Got rooms:', rooms.length, 'accessories:', accessories.length);
+    log('[Button] Got rooms:', rooms.length, 'accessories:', accessories.length);
 
-    // Filter lightbulb accessories
-    const lights = accessories.filter((a) => {
-      const hasLightbulb = SprutHubClient.findLightbulbService(a) !== undefined;
-      if (hasLightbulb) {
-        log('[Light] Found lightbulb:', a.name, a.id);
+    const devices = accessories.filter((a) => {
+      const hasButton = SprutHubClient.findButtonService(a) !== undefined;
+      if (hasButton) {
+        log('[Button] Found button:', a.name, a.id);
       }
-      return hasLightbulb;
+      return hasButton;
     });
 
-    log('[Light] Filtered lights:', lights.length);
+    log('[Button] Filtered buttons:', devices.length);
 
     sendToPropertyInspector({
       event: 'testResult',
       success: true,
       rooms,
-      lights,
+      devices,
     });
 
-    log('[Light] Sent testResult to PI');
+    log('[Button] Sent testResult to PI');
   } catch (err) {
-    log('[Light] testConnection error:', err);
+    log('[Button] testConnection error:', err);
     sendToPropertyInspector({
       event: 'testResult',
       success: false,
@@ -748,7 +687,7 @@ async function handleTestConnection(host, token, serial) {
  * @returns {Promise<void>}
  */
 async function handleGetDevices(host, token, serial) {
-  log('[Light] handleGetDevices:', { host, token: token ? '***' : undefined, serial });
+  log('[Button] handleGetDevices:', { host, token: token ? '***' : undefined, serial });
 
   try {
     const client = getClient(host, token, serial);
@@ -765,18 +704,17 @@ async function handleGetDevices(host, token, serial) {
 
     const [rooms, accessories] = await Promise.all([client.getRooms(), client.getAccessories()]);
 
-    // Filter lightbulb accessories
-    const lights = accessories.filter((a) => SprutHubClient.findLightbulbService(a) !== undefined);
+    const devices = accessories.filter((a) => SprutHubClient.findButtonService(a) !== undefined);
 
-    log('[Light] handleGetDevices: found', rooms.length, 'rooms,', lights.length, 'lights');
+    log('[Button] handleGetDevices: found', rooms.length, 'rooms,', devices.length, 'buttons');
 
     sendToPropertyInspector({
       event: 'deviceList',
       rooms,
-      lights,
+      devices,
     });
 
-    log('[Light] Sent deviceList to PI');
+    log('[Button] Sent deviceList to PI');
   } catch (err) {
     sendToPropertyInspector({
       event: 'error',
@@ -788,14 +726,13 @@ async function handleGetDevices(host, token, serial) {
 /**
  * Handle settings update
  * @param {string} context - Action context
- * @param {LightSettings} settings - New settings
+ * @param {ButtonSettings} settings - New settings
  * @returns {void}
  */
 function onSettingsUpdate(context, settings) {
   const ctx = getContext(context);
-  const oldSettings = /** @type {LightSettings|undefined} */ (ctx?.settings);
+  const oldSettings = /** @type {ButtonSettings|undefined} */ (ctx?.settings);
 
-  // Check if device actually changed
   const deviceChanged =
     !oldSettings ||
     oldSettings.accessoryId !== settings.accessoryId ||
@@ -805,16 +742,14 @@ function onSettingsUpdate(context, settings) {
     ctx.settings = settings;
   }
 
-  // If device didn't change and we have state, just update button with existing state
   if (!deviceChanged && ctx?.state) {
-    updateButton(context, settings, /** @type {LightState} */ (ctx.state));
+    updateButton(context, settings, /** @type {ButtonState} */ (ctx.state));
     return;
   }
 
-  // Device changed or no state yet - fetch new state
-  updateButton(context, settings, { on: false, connecting: true });
+  updateButton(context, settings, { ready: false, connecting: true });
 
-  fetchLightState(settings).then((state) => {
+  fetchButtonState(settings).then((state) => {
     const c = getContext(context);
     if (c) {
       c.state = state;
@@ -830,8 +765,8 @@ function onSettingsUpdate(context, settings) {
  * @returns {void}
  */
 function onDidReceiveSettings(context, payload) {
-  /** @type {LightSettings} */
-  const settings = /** @type {LightSettings} */ (payload?.settings || {});
+  /** @type {ButtonSettings} */
+  const settings = /** @type {ButtonSettings} */ (payload?.settings || {});
   onSettingsUpdate(context, settings);
 }
 
@@ -842,10 +777,9 @@ function onDidReceiveSettings(context, payload) {
  */
 function onPropertyInspectorDidAppear(context) {
   const ctx = getContext(context);
-  /** @type {LightSettings} */
-  const settings = /** @type {LightSettings} */ (ctx?.settings || {});
+  /** @type {ButtonSettings} */
+  const settings = /** @type {ButtonSettings} */ (ctx?.settings || {});
 
-  // If we have connection settings, send device list
   if (settings.host && settings.token && settings.serial) {
     handleGetDevices(settings.host, settings.token, settings.serial);
   }

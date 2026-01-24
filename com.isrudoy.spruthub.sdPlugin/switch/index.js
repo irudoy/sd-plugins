@@ -1,72 +1,13 @@
 /**
- * Light - Property Inspector
- * Using StreamDock SDK pattern
- * @module light/index
- */
-
-/**
- * @typedef {Object} PIRoom
- * @property {number} id
- * @property {string} name
- */
-
-/**
- * @typedef {Object} PICharacteristicControl
- * @property {unknown} [value]
- */
-
-/**
- * @typedef {Object} PICharacteristic
- * @property {number} cId
- * @property {number|string} type
- * @property {PICharacteristicControl} [control]
- */
-
-/**
- * @typedef {Object} PIService
- * @property {number} sId
- * @property {string} [name]
- * @property {number|string} type
- * @property {PICharacteristic[]} [characteristics]
- */
-
-/**
- * @typedef {Object} PILight
- * @property {number} id
- * @property {string} name
- * @property {number} [roomId]
- * @property {PIService[]} [services]
- */
-
-/**
- * Local settings (per-widget)
- * Connection params stored here for button operation (also stored globally for UI)
- * @typedef {Object} LightPISettings
- * @property {string} [host] - Hub hostname (copied from global)
- * @property {string} [token] - Auth token (copied from global)
- * @property {string} [serial] - Hub serial (copied from global)
- * @property {number} [roomId] - Selected room ID
- * @property {number} [accessoryId]
- * @property {string} [accessoryName]
- * @property {number} [serviceId] - Actual service ID (sId of Lightbulb service)
- * @property {string} [serviceName] - Service name for display
- * @property {number} [characteristicId] - Actual On characteristic ID (not type)
- * @property {string} [customName] - Custom display name (overrides auto name)
- * @property {string} [action]
+ * Switch - Property Inspector
+ * @module switch/index
  */
 
 // SDK configuration
 const $local = false;
 const $back = false;
 
-/**
- * @typedef {Object} GlobalSettings
- * @property {string} [host]
- * @property {string} [token]
- * @property {string} [serial]
- */
-
-/** @type {GlobalSettings} */
+/** @type {{host?: string, token?: string, serial?: string}} */
 let globalSettings = {};
 
 // DOM elements cache
@@ -79,7 +20,7 @@ const $dom = {
   token: $('#token'),
   serial: $('#serial'),
   roomSelect: $('#roomSelect'),
-  lightSelect: $('#lightSelect'),
+  deviceSelect: $('#deviceSelect'),
   serviceSelectRow: $('#serviceSelectRow'),
   serviceSelect: $('#serviceSelect'),
   customName: $('#customName'),
@@ -94,49 +35,35 @@ let connectionSettingsVisible = false;
 /** @type {boolean} */
 let devicesLoaded = false;
 
-// Data storage
-/** @type {PIRoom[]} */
+/** @type {Array<{id: number, name: string}>} */
 let rooms = [];
 
-/** @type {PILight[]} */
-let lights = [];
+/** @type {Array<{id: number, name: string, roomId?: number, services?: Array<{sId: number, name?: string, type: number|string, characteristics?: Array<{cId: number, type: number|string, control?: {value?: unknown}}>}>}>} */
+let devices = [];
 
-// Service type for Lightbulb
-const SERVICE_LIGHTBULB = 13;
+// Service type for Switch
+const SERVICE_SWITCH = 'Switch';
 
 /**
- * StreamDock event handlers - SDK pattern
+ * StreamDock event handlers
  */
 const $propEvent = {
-  /**
-   * Called when settings are received from StreamDock
-   * @param {{settings: LightPISettings}} data
-   */
   didReceiveSettings(data) {
     const settings = data.settings || {};
-
-    // Load local device settings into UI
     loadSettings(settings);
-
-    // Request global settings to get connection params
     requestGlobalSettings();
   },
 
-  /**
-   * Called when plugin sends data to PI
-   * @param {{event?: string, rooms?: PIRoom[], lights?: PILight[], success?: boolean, error?: string, message?: string}} data
-   */
   sendToPropertyInspector(data) {
     if (!data) return;
 
     switch (data.event) {
       case 'deviceList':
         rooms = data.rooms || [];
-        lights = data.lights || [];
+        devices = data.devices || [];
         devicesLoaded = true;
         populateRooms();
-        populateLights();
-        // Update status to connected (no status message to avoid flashing)
+        populateDevices();
         updateConnectionStatus(true, globalSettings.host || $dom.host?.value?.trim());
         break;
 
@@ -144,15 +71,12 @@ const $propEvent = {
         if (data.success) {
           showStatus('Connection successful!', 'success');
           rooms = data.rooms || [];
-          lights = data.lights || [];
+          devices = data.devices || [];
           devicesLoaded = true;
           populateRooms();
-          populateLights();
-          // Save working connection settings globally
+          populateDevices();
           saveGlobalSettings();
-          // Update status to connected
           updateConnectionStatus(true, $dom.host?.value?.trim());
-          // Hide settings panel after successful connection
           if (connectionSettingsVisible) {
             toggleConnectionSettings();
           }
@@ -169,17 +93,10 @@ const $propEvent = {
     }
   },
 
-  /**
-   * Called when global settings are received
-   * @param {{settings: GlobalSettings}} data
-   */
   didReceiveGlobalSettings(data) {
     globalSettings = data.settings || {};
-
-    // Load connection settings into UI fields
     loadConnectionSettings(globalSettings);
 
-    // Sync global connection settings to local (for button operation)
     if (typeof $settings !== 'undefined' && $settings) {
       if (globalSettings.host) $settings.host = globalSettings.host;
       if (globalSettings.token) $settings.token = globalSettings.token;
@@ -188,17 +105,12 @@ const $propEvent = {
 
     const hasCredentials = globalSettings.host && globalSettings.token && globalSettings.serial;
 
-    // Update connection status based on current state
     if (devicesLoaded && hasCredentials) {
-      // Already connected and have devices
       updateConnectionStatus(true, globalSettings.host);
     } else if (!hasCredentials) {
-      // No credentials configured
       updateConnectionStatus(false);
     }
-    // If hasCredentials but !devicesLoaded, we'll request devices and status will update on response
 
-    // If we have valid connection credentials and haven't loaded devices yet, request them
     if (!devicesLoaded && hasCredentials) {
       $websocket?.sendToPlugin({
         event: 'getDevices',
@@ -210,14 +122,10 @@ const $propEvent = {
   },
 };
 
-/**
- * Populate rooms dropdown
- */
 function populateRooms() {
   const select = $dom.roomSelect;
   if (!select) return;
 
-  // Remember current selection or use saved setting
   const currentValue = select.value;
   const savedRoomId =
     typeof $settings !== 'undefined' && $settings?.roomId ? String($settings.roomId) : '';
@@ -231,33 +139,26 @@ function populateRooms() {
     select.appendChild(option);
   });
 
-  // Restore selection
   if (currentValue) {
     select.value = currentValue;
   } else if (savedRoomId) {
     select.value = savedRoomId;
   }
 
-  // Trigger light filtering
-  populateLights();
+  populateDevices();
 }
 
-/**
- * Populate lights dropdown (filtered by room if selected)
- */
-function populateLights() {
-  const select = $dom.lightSelect;
+function populateDevices() {
+  const select = $dom.deviceSelect;
   if (!select) return;
 
   const roomId = $dom.roomSelect?.value;
   const currentValue = select.value;
 
   select.innerHTML = '<option value="">-- Select Device --</option>';
-
-  // Hide service select by default
   hideServiceSelect();
 
-  if (lights.length === 0) {
+  if (devices.length === 0) {
     const option = document.createElement('option');
     option.value = '';
     option.textContent = 'No devices found';
@@ -266,193 +167,131 @@ function populateLights() {
     return;
   }
 
-  // Filter by room if selected
-  const filteredLights = roomId ? lights.filter((l) => l.roomId === parseInt(roomId)) : lights;
+  const filteredDevices = roomId ? devices.filter((d) => d.roomId === parseInt(roomId)) : devices;
 
-  filteredLights.forEach((light) => {
+  filteredDevices.forEach((device) => {
     const option = document.createElement('option');
-    option.value = String(light.id);
-    option.textContent = light.name;
+    option.value = String(device.id);
+    option.textContent = device.name;
     select.appendChild(option);
   });
 
-  // Restore previous selection if exists
   let restored = false;
-  if (currentValue && filteredLights.some((l) => l.id === parseInt(currentValue))) {
+  if (currentValue && filteredDevices.some((d) => d.id === parseInt(currentValue))) {
     select.value = currentValue;
     restored = true;
   } else if (typeof $settings !== 'undefined' && $settings && $settings.accessoryId) {
     const accessoryId = String($settings.accessoryId);
-    if (filteredLights.some((l) => l.id === parseInt(accessoryId))) {
+    if (filteredDevices.some((d) => d.id === parseInt(accessoryId))) {
       select.value = accessoryId;
       restored = true;
     }
   }
 
-  // If we restored a selection, populate services
   if (restored) {
     populateServices();
   }
 }
 
-/**
- * Filter lights when room changes
- */
-function filterLights() {
-  // Save selected room
+function filterDevices() {
   const roomId = $dom.roomSelect?.value;
   if (typeof $settings !== 'undefined' && $settings) {
     $settings.roomId = roomId ? parseInt(roomId) : undefined;
   }
-  populateLights();
+  populateDevices();
 }
 
-// Characteristic types for On/Off (can be number or string)
-const CHAR_TYPE_ON = 37;
-const CHAR_TYPE_ON_NAMES = ['On', 'Power', 'PowerState'];
-
-/**
- * Check if service is a Lightbulb
- * @param {PIService} service
- * @returns {boolean}
- */
-function isLightbulbService(service) {
-  return service.type === SERVICE_LIGHTBULB || service.type === 'Lightbulb';
+function isSwitchService(service) {
+  return service.type === SERVICE_SWITCH || service.type === 49;
 }
 
-/**
- * Get all Lightbulb services from accessory
- * @param {PILight} accessory
- * @returns {PIService[]}
- */
-function getLightbulbServices(accessory) {
-  return accessory.services?.filter(isLightbulbService) || [];
+function getSwitchServices(accessory) {
+  return accessory.services?.filter(isSwitchService) || [];
 }
 
-/**
- * Check if characteristic value is boolean type
- * @param {PICharacteristic} char
- * @returns {boolean}
- */
-function isBooleanCharacteristic(char) {
-  const value = char.control?.value;
-  if (!value) return false;
-  return typeof value === 'boolean' || 'boolValue' in value;
-}
-
-/**
- * Find On characteristic in service
- * @param {PIService} service
- * @returns {PICharacteristic|undefined}
- */
 /**
  * Get characteristic type (handles both c.type and c.control.type)
- * @param {PICharacteristic} c
- * @returns {string|number|undefined}
  */
 function getCharType(c) {
   return c.type ?? c.control?.type;
 }
 
 function findOnCharacteristic(service) {
-  // Try by type name "On" or similar (check both c.type and c.control.type)
-  let onChar = service.characteristics?.find((c) => {
+  return service.characteristics?.find((c) => {
     const type = getCharType(c);
-    return type === CHAR_TYPE_ON || CHAR_TYPE_ON_NAMES.includes(String(type));
+    return type === 37 || type === 'On' || type === 'Power';
   });
-  // Fallback: find by boolean value
-  if (!onChar) {
-    onChar = service.characteristics?.find((c) => isBooleanCharacteristic(c));
-  }
-  return onChar;
 }
 
-/**
- * Hide service select row
- */
 function hideServiceSelect() {
   if ($dom.serviceSelectRow) {
     $dom.serviceSelectRow.style.display = 'none';
   }
 }
 
-/**
- * Show service select row
- */
 function showServiceSelect() {
   if ($dom.serviceSelectRow) {
     $dom.serviceSelectRow.style.display = '';
   }
 }
 
-/**
- * Populate services dropdown for selected accessory
- */
 function populateServices() {
-  const accessoryId = $dom.lightSelect?.value;
+  const accessoryId = $dom.deviceSelect?.value;
   if (!accessoryId) {
     hideServiceSelect();
     return;
   }
 
-  const accessory = lights.find((l) => l.id === parseInt(accessoryId));
+  const accessory = devices.find((d) => d.id === parseInt(accessoryId));
   if (!accessory) {
     hideServiceSelect();
     return;
   }
 
-  const lightbulbServices = getLightbulbServices(accessory);
+  const switchServices = getSwitchServices(accessory);
 
-  if (lightbulbServices.length === 0) {
+  if (switchServices.length === 0) {
     hideServiceSelect();
     return;
   }
 
-  // If only one lightbulb service, auto-select it and hide dropdown
-  if (lightbulbServices.length === 1) {
+  if (switchServices.length === 1) {
     hideServiceSelect();
-    selectServiceById(lightbulbServices[0].sId);
+    selectServiceById(switchServices[0].sId);
     return;
   }
 
-  // Multiple lightbulb services - show dropdown
   showServiceSelect();
 
   const select = $dom.serviceSelect;
   if (!select) return;
 
-  select.innerHTML = '<option value="">-- Select Lightbulb --</option>';
+  select.innerHTML = '<option value="">-- Select Switch --</option>';
 
-  lightbulbServices.forEach((service) => {
+  switchServices.forEach((service) => {
     const option = document.createElement('option');
     option.value = String(service.sId);
-    option.textContent = service.name || `Lightbulb ${service.sId}`;
+    option.textContent = service.name || `Switch ${service.sId}`;
     select.appendChild(option);
   });
 
-  // Restore saved service selection
   if (typeof $settings !== 'undefined' && $settings && $settings.serviceId) {
     const savedServiceId = String($settings.serviceId);
-    if (lightbulbServices.some((s) => s.sId === parseInt(savedServiceId))) {
+    if (switchServices.some((s) => s.sId === parseInt(savedServiceId))) {
       select.value = savedServiceId;
     }
   }
 }
 
-/**
- * Called when accessory is selected
- */
 function selectAccessory() {
-  const accessoryId = $dom.lightSelect?.value;
+  const accessoryId = $dom.deviceSelect?.value;
 
-  // Clear service selection when accessory changes
   if ($dom.serviceSelect) {
     $dom.serviceSelect.value = '';
   }
 
   if (!accessoryId) {
     hideServiceSelect();
-    // Clear settings
     if (typeof $settings !== 'undefined' && $settings) {
       $settings.accessoryId = undefined;
       $settings.accessoryName = undefined;
@@ -464,22 +303,17 @@ function selectAccessory() {
     return;
   }
 
-  const accessory = lights.find((l) => l.id === parseInt(accessoryId));
+  const accessory = devices.find((d) => d.id === parseInt(accessoryId));
   if (!accessory) return;
 
-  // Save accessory info
   if (typeof $settings !== 'undefined' && $settings) {
     $settings.accessoryId = accessory.id;
     $settings.accessoryName = accessory.name;
   }
 
-  // Populate services dropdown
   populateServices();
 }
 
-/**
- * Called when service is selected from dropdown
- */
 function selectService() {
   const serviceId = $dom.serviceSelect?.value;
   if (!serviceId) return;
@@ -487,26 +321,18 @@ function selectService() {
   selectServiceById(parseInt(serviceId));
 }
 
-/**
- * Select service by ID and save settings
- * @param {number} serviceId
- */
 function selectServiceById(serviceId) {
-  const accessoryId = $dom.lightSelect?.value;
+  const accessoryId = $dom.deviceSelect?.value;
   if (!accessoryId) return;
 
-  const accessory = lights.find((l) => l.id === parseInt(accessoryId));
+  const accessory = devices.find((d) => d.id === parseInt(accessoryId));
   if (!accessory) return;
 
   const service = accessory.services?.find((s) => s.sId === serviceId);
-  if (!service) {
-    return;
-  }
+  if (!service) return;
 
   const onChar = findOnCharacteristic(service);
-  if (!onChar) {
-    return;
-  }
+  if (!onChar) return;
 
   if (typeof $settings !== 'undefined' && $settings) {
     $settings.serviceId = service.sId;
@@ -517,22 +343,14 @@ function selectServiceById(serviceId) {
   saveSettings();
 }
 
-/**
- * Load local settings into UI (device selection only)
- * Connection settings are loaded from globalSettings
- * @param {LightPISettings} settings
- */
 function loadSettings(settings) {
   if (settings.roomId !== undefined && $dom.roomSelect) {
     $dom.roomSelect.value = String(settings.roomId);
   }
 
-  if (settings.accessoryId !== undefined && $dom.lightSelect) {
-    $dom.lightSelect.value = String(settings.accessoryId);
+  if (settings.accessoryId !== undefined && $dom.deviceSelect) {
+    $dom.deviceSelect.value = String(settings.accessoryId);
   }
-
-  // Service selection will be restored when populateServices is called
-  // after device list is received
 
   if (settings.customName !== undefined && $dom.customName) {
     $dom.customName.value = settings.customName;
@@ -543,11 +361,6 @@ function loadSettings(settings) {
   }
 }
 
-/**
- * Load connection settings from global settings into UI fields
- * Does NOT update connection status - that's handled separately
- * @param {GlobalSettings} settings
- */
 function loadConnectionSettings(settings) {
   if (settings.host !== undefined && $dom.host) {
     $dom.host.value = settings.host;
@@ -562,60 +375,36 @@ function loadConnectionSettings(settings) {
   }
 }
 
-/**
- * Save settings to StreamDock
- * Connection params are stored in both global (for UI) and local (for button operation)
- */
 function saveSettings() {
   if (typeof $settings === 'undefined' || !$settings) {
     return;
   }
 
-  // Get current connection settings (from global or DOM)
   const host = globalSettings.host || $dom.host?.value?.trim() || '';
   const token = globalSettings.token || $dom.token?.value || '';
   const serial = globalSettings.serial || $dom.serial?.value?.trim() || '';
 
-  // Save connection params to local settings (for button operation)
-  // This ensures the button works even after restart
   $settings.host = host;
   $settings.token = token;
   $settings.serial = serial;
-
-  // Save action and custom name
   $settings.customName = $dom.customName?.value?.trim() || '';
   $settings.action = $dom.actionSelect?.value || 'toggle';
 
-  // Send to plugin for immediate update
   sendSettingsToPlugin();
 }
 
-/**
- * Check if WebSocket is connected
- * @returns {boolean}
- */
 function isWebSocketConnected() {
   return typeof $websocket !== 'undefined' && $websocket && $websocket.readyState === 1;
 }
 
-/**
- * Send current settings to plugin (combines global + local)
- */
 function sendSettingsToPlugin() {
-  if (!isWebSocketConnected()) {
-    return;
-  }
-  if (typeof $settings === 'undefined' || !$settings) {
-    return;
-  }
+  if (!isWebSocketConnected()) return;
+  if (typeof $settings === 'undefined' || !$settings) return;
 
-  // Combine global connection settings with local device settings
   $websocket.sendToPlugin({
-    // Connection from global settings
     host: globalSettings.host || '',
     token: globalSettings.token || '',
     serial: globalSettings.serial || '',
-    // Device selection from local settings
     accessoryId: $settings.accessoryId,
     accessoryName: $settings.accessoryName,
     serviceId: $settings.serviceId,
@@ -626,9 +415,6 @@ function sendSettingsToPlugin() {
   });
 }
 
-/**
- * Test connection to Sprut.Hub
- */
 function testConnection() {
   const host = $dom.host?.value?.trim();
   const token = $dom.token?.value;
@@ -665,7 +451,6 @@ function testConnection() {
     serial: serial,
   });
 
-  // Timeout for test
   setTimeout(() => {
     if ($dom.testButton?.disabled) {
       showStatus('Connection timeout', 'error');
@@ -674,9 +459,6 @@ function testConnection() {
   }, 15000);
 }
 
-/**
- * Refresh device list from plugin
- */
 function refreshDevices() {
   const host = $dom.host?.value?.trim();
   const token = $dom.token?.value;
@@ -701,11 +483,6 @@ function refreshDevices() {
   });
 }
 
-/**
- * Show status message
- * @param {string} message
- * @param {string} type
- */
 function showStatus(message, type) {
   if (!$dom.statusMessage) return;
 
@@ -713,7 +490,6 @@ function showStatus(message, type) {
   $dom.statusMessage.className = 'status-message status-' + type;
   $dom.statusMessage.style.display = 'block';
 
-  // Auto-hide success messages
   if (type === 'success') {
     setTimeout(() => {
       if ($dom.statusMessage.textContent === message) {
@@ -723,9 +499,6 @@ function showStatus(message, type) {
   }
 }
 
-/**
- * Disable test button during test
- */
 function disableTestButton() {
   if ($dom.testButton) {
     $dom.testButton.disabled = true;
@@ -733,9 +506,6 @@ function disableTestButton() {
   }
 }
 
-/**
- * Enable test button after test
- */
 function enableTestButton() {
   if ($dom.testButton) {
     $dom.testButton.disabled = false;
@@ -743,13 +513,6 @@ function enableTestButton() {
   }
 }
 
-// ============================================================
-// Connection Settings UI
-// ============================================================
-
-/**
- * Toggle connection settings panel visibility
- */
 function toggleConnectionSettings() {
   connectionSettingsVisible = !connectionSettingsVisible;
 
@@ -764,11 +527,6 @@ function toggleConnectionSettings() {
   }
 }
 
-/**
- * Update connection status text
- * @param {boolean} connected
- * @param {string} [host]
- */
 function updateConnectionStatus(connected, host) {
   if (!$dom.connectionStatusText) return;
 
@@ -784,13 +542,6 @@ function updateConnectionStatus(connected, host) {
   }
 }
 
-// ============================================================
-// Global Settings
-// ============================================================
-
-/**
- * Request global settings from StreamDock
- */
 function requestGlobalSettings() {
   if (!isWebSocketConnected()) return;
 
@@ -802,9 +553,6 @@ function requestGlobalSettings() {
   );
 }
 
-/**
- * Save connection settings to global settings
- */
 function saveGlobalSettings() {
   if (!isWebSocketConnected()) return;
 
@@ -812,7 +560,6 @@ function saveGlobalSettings() {
   const token = $dom.token?.value || '';
   const serial = $dom.serial?.value?.trim() || '';
 
-  // Only save if we have all connection params
   if (host && token && serial) {
     $websocket.send(
       JSON.stringify({
@@ -822,15 +569,9 @@ function saveGlobalSettings() {
       })
     );
 
-    // Update local cache
     globalSettings = { host, token, serial };
-
-    // Update status
     updateConnectionStatus(false, host);
   }
 }
 
-// Initialize on DOM load
-document.addEventListener('DOMContentLoaded', () => {
-  // UI is ready
-});
+document.addEventListener('DOMContentLoaded', () => {});

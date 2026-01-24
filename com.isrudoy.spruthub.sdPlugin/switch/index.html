@@ -1,0 +1,173 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, minimum-scale=1, user-scalable=no">
+    <title>Switch - Settings</title>
+    <link rel="stylesheet" href="../static/css/sdpi.css">
+    <script src="../static/common.js"></script>
+    <script src="../static/sd-action.js"></script>
+    <style>
+        select {
+            color: rgb(180, 180, 180);
+        }
+        input[type="text"], input[type="password"] {
+            width: 100%;
+            box-sizing: border-box;
+        }
+        .status-message {
+            padding: 8px 12px;
+            margin: 4px 0;
+            border-radius: 4px;
+            font-size: 9pt;
+        }
+        .status-success {
+            background-color: rgba(76, 175, 80, 0.2);
+            color: #4CAF50;
+        }
+        .status-error {
+            background-color: rgba(244, 67, 54, 0.2);
+            color: #F44336;
+        }
+        .status-info {
+            background-color: rgba(33, 150, 243, 0.2);
+            color: #2196F3;
+        }
+        #statusMessage {
+            display: none;
+        }
+        .connection-btn {
+            width: 100%;
+            padding: 8px 16px;
+            margin: 4px 0;
+        }
+        .connection-status {
+            text-align: center;
+            padding: 8px;
+            font-size: 9pt;
+            color: #888;
+        }
+        .connection-status.connected {
+            color: #4CAF50;
+        }
+        .connection-status.disconnected {
+            color: #F44336;
+        }
+        #connectionSettings {
+            display: none;
+            border: 1px solid #444;
+            border-radius: 4px;
+            margin: 8px 0;
+            padding: 8px 0;
+            background: rgba(0,0,0,0.2);
+        }
+        #connectionSettings .sdpi-heading {
+            margin-top: 0;
+        }
+    </style>
+</head>
+<body>
+    <div class="sdpi-wrapper" style="display: none;">
+
+        <!-- Connection Settings Button -->
+        <div class="sdpi-item">
+            <div class="sdpi-item-label empty"></div>
+            <button class="sdpi-item-value connection-btn" id="connectionBtn" onclick="toggleConnectionSettings()">Connection Settings</button>
+        </div>
+
+        <!-- Connection Status -->
+        <div id="connectionStatusText" class="connection-status">
+            Loading...
+        </div>
+
+        <!-- Connection Settings Panel (hidden by default) -->
+        <div id="connectionSettings">
+            <div class="sdpi-heading">Sprut.Hub Connection</div>
+
+            <!-- Host -->
+            <div class="sdpi-item">
+                <div class="sdpi-item-label">Host</div>
+                <input class="sdpi-item-value" type="text" id="host" placeholder="spruthub.local or IP" onchange="saveSettings()">
+            </div>
+
+            <!-- Token -->
+            <div class="sdpi-item">
+                <div class="sdpi-item-label">Token</div>
+                <input class="sdpi-item-value" type="password" id="token" placeholder="API token" onchange="saveSettings()">
+            </div>
+
+            <!-- Serial -->
+            <div class="sdpi-item">
+                <div class="sdpi-item-label">Serial</div>
+                <input class="sdpi-item-value" type="text" id="serial" placeholder="Hub serial number" onchange="saveSettings()">
+            </div>
+
+            <!-- Test Connection Button -->
+            <div class="sdpi-item">
+                <div class="sdpi-item-label empty"></div>
+                <button class="sdpi-item-value" id="testButton" onclick="testConnection()">Test Connection</button>
+            </div>
+
+            <!-- Status Message -->
+            <div class="sdpi-item">
+                <div class="sdpi-item-label empty"></div>
+                <div class="sdpi-item-value">
+                    <div id="statusMessage" class="status-message"></div>
+                </div>
+            </div>
+        </div>
+
+        <div class="sdpi-heading">Switch Selection</div>
+
+        <!-- Room Select -->
+        <div class="sdpi-item">
+            <div class="sdpi-item-label">Room</div>
+            <select class="sdpi-item-value" id="roomSelect" onchange="filterDevices()">
+                <option value="">-- All Rooms --</option>
+            </select>
+        </div>
+
+        <!-- Device Select -->
+        <div class="sdpi-item">
+            <div class="sdpi-item-label">Device</div>
+            <select class="sdpi-item-value" id="deviceSelect" onchange="selectAccessory()">
+                <option value="">-- Select Device --</option>
+            </select>
+        </div>
+
+        <!-- Service Select (shown only if multiple) -->
+        <div class="sdpi-item" id="serviceSelectRow" style="display: none;">
+            <div class="sdpi-item-label">Switch</div>
+            <select class="sdpi-item-value" id="serviceSelect" onchange="selectService()">
+                <option value="">-- Select Switch --</option>
+            </select>
+        </div>
+
+        <!-- Custom Name -->
+        <div class="sdpi-item">
+            <div class="sdpi-item-label">Name</div>
+            <input class="sdpi-item-value" type="text" id="customName" placeholder="Custom display name" onchange="saveSettings()">
+        </div>
+
+        <!-- Refresh Button -->
+        <div class="sdpi-item">
+            <div class="sdpi-item-label empty"></div>
+            <button class="sdpi-item-value" onclick="refreshDevices()">Refresh Devices</button>
+        </div>
+
+        <div class="sdpi-heading">Action</div>
+
+        <!-- Action Select -->
+        <div class="sdpi-item">
+            <div class="sdpi-item-label">On Press</div>
+            <select class="sdpi-item-value" id="actionSelect" onchange="saveSettings()">
+                <option value="toggle">Toggle</option>
+                <option value="on">Turn On</option>
+                <option value="off">Turn Off</option>
+            </select>
+        </div>
+    </div>
+
+    <script src="index.js"></script>
+</body>
+</html>

@@ -35,6 +35,12 @@ export default [
       '**/osascript/**/*.js',
       '**/vpn/**/*.js',
       '**/light/**/*.js',
+      '**/switch/**/*.js',
+      '**/outlet/**/*.js',
+      '**/lock/**/*.js',
+      '**/cover/**/*.js',
+      '**/thermostat/**/*.js',
+      '**/sensor/**/*.js',
     ],
     languageOptions: {
       sourceType: 'module',

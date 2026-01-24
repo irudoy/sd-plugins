@@ -8,7 +8,7 @@ Monorepo for StreamDock plugins (macOS).
 |--------|-----|-------------|
 | mactools | `com.isrudoy.mactools` | Drive Info, Battery Monitor, Run Script |
 | unifi | `com.isrudoy.unifi` | VPN Status - Unifi Network VPN client |
-| spruthub | `com.isrudoy.spruthub` | Sprut.Hub smart home control (lights) |
+| spruthub | `com.isrudoy.spruthub` | Sprut.Hub smart home control (8 device types) |
 
 **Architecture:** Node.js backend + HTML/JS Property Inspector
 **SDK:** StreamDock SDK (NOT Elgato Stream Deck SDK)
@@ -34,13 +34,30 @@ sd-plugins/
 │   ├── battery/
 │   ├── osascript/
 │   └── static/               # SDK (not linted)
-└── com.isrudoy.unifi.sdPlugin/
+├── com.isrudoy.unifi.sdPlugin/
+│   ├── package.json
+│   ├── package-lock.json
+│   ├── manifest.json
+│   ├── plugin/
+│   ├── vpn/
+│   └── static/
+└── com.isrudoy.spruthub.sdPlugin/
     ├── package.json
     ├── package-lock.json
     ├── manifest.json
-    ├── plugin/
-    ├── vpn/
-    └── static/
+    ├── plugin/               # Node.js backend
+    │   ├── index.js          # Entry point, event routing
+    │   ├── lib/              # Shared modules
+    │   └── actions/          # Device actions (8 types)
+    ├── light/                # Property Inspectors (one per device type)
+    ├── switch/
+    ├── outlet/
+    ├── lock/
+    ├── cover/
+    ├── thermostat/
+    ├── sensor/
+    ├── button/
+    └── static/               # SDK (not linted)
 ```
 
 ## Development
@@ -50,7 +67,8 @@ sd-plugins/
 npm install           # Install dev dependencies in root
 cd com.isrudoy.mactools.sdPlugin && npm install && cd ..
 cd com.isrudoy.unifi.sdPlugin && npm install && cd ..
-npm run link          # Symlink both plugins to StreamDock
+cd com.isrudoy.spruthub.sdPlugin && npm install && cd ..
+npm run link          # Symlink all plugins to StreamDock
 ```
 
 ### Scripts (from root)
@@ -59,9 +77,10 @@ npm run lint          # ESLint check
 npm run fmt           # ESLint + Prettier fix
 npm run typecheck     # TypeScript check (JSDoc)
 npm run restart       # Restart StreamDock app
-npm run link          # Link both plugins
+npm run link          # Link all plugins
 npm run link:mactools # Link mactools only
 npm run link:unifi    # Link unifi only
+npm run link:spruthub # Link spruthub only
 npm run unlink        # Remove symlinks
 ```
 
@@ -116,6 +135,102 @@ VPN Status action for Unifi Network VPN clients.
 GET /proxy/network/api/s/default/rest/networkconf     # VPN list
 GET /proxy/network/v2/api/site/default/vpn/connections # VPN status
 Headers: X-API-KEY: <key>, Accept: application/json
+```
+
+## spruthub (com.isrudoy.spruthub)
+
+Smart home control via Sprut.Hub controller (HomeKit-compatible).
+
+### Actions
+
+| Action | UUID | Description |
+|--------|------|-------------|
+| Light | `com.isrudoy.spruthub.light` | Lightbulb control with brightness |
+| Switch | `com.isrudoy.spruthub.switch` | Simple on/off switch |
+| Outlet | `com.isrudoy.spruthub.outlet` | Power outlet on/off |
+| Lock | `com.isrudoy.spruthub.lock` | Door lock control |
+| Cover | `com.isrudoy.spruthub.cover` | Window covering (blinds/shades) 0-100% |
+| Thermostat | `com.isrudoy.spruthub.thermostat` | Climate control with temperature |
+| Sensor | `com.isrudoy.spruthub.sensor` | Read-only sensors (temp, humidity, motion, contact) |
+| Button | `com.isrudoy.spruthub.button` | Trigger button events (single/double/long press) |
+
+### Module Structure
+
+```
+plugin/
+├── index.js              # Entry point, WebSocket, event routing
+├── lib/
+│   ├── common.js         # Constants, colors, canvas layout, logging
+│   ├── state.js          # Shared state (contexts, timers)
+│   ├── websocket.js      # setImage, setTitle, sendToPropertyInspector
+│   └── spruthub.js       # SprutHubClient: WebSocket API, service/char helpers
+└── actions/
+    ├── light.js          # Lightbulb (on/off, brightness)
+    ├── switch.js         # Switch (on/off)
+    ├── outlet.js         # Outlet (on/off)
+    ├── lock.js           # Lock (locked/unlocked)
+    ├── cover.js          # Cover (position 0-100%)
+    ├── thermostat.js     # Thermostat (temp, mode)
+    ├── sensor.js         # Sensors (temp, humidity, motion, contact)
+    └── button.js         # Button (single/double/long press)
+```
+
+### Sprut.Hub API
+
+WebSocket JSON-RPC protocol over `wss://{host}/bff/`.
+
+**Authentication:**
+```javascript
+{ jsonrpc: '2.0', method: 'auth', params: { token, serial }, id }
+```
+
+**Key methods:**
+- `getAccessories` — list all accessories with services and characteristics
+- `getRooms` — list rooms for device grouping
+- `updateCharacteristic` — change device state
+
+**Service types (from API):**
+- `Lightbulb` / 13 — lights
+- `Switch` — switches
+- `Outlet` — outlets
+- `LockMechanism` — locks
+- `WindowCovering` — blinds/shades
+- `Thermostat` — climate control
+- `TemperatureSensor`, `HumiditySensor`, `ContactSensor`, `MotionSensor` — sensors
+- `StatelessProgrammableSwitch` — buttons (doorbell, Aqara buttons)
+
+**Characteristic values:**
+- `boolValue` — on/off states
+- `intValue` — modes, positions (0-100)
+- `doubleValue` — temperature, humidity
+
+**Offline detection:**
+- API returns `online: true/false` on accessory objects
+- Check via `SprutHubClient.isAccessoryOffline(accessory)`
+
+### Button States
+
+All actions support these visual states:
+- **Normal** — device state with icon, name, status bar
+- **Connecting** — yellow, "Connecting..." text
+- **Error** — red background, error message
+- **Not Configured** — gray, "Setup" / "Open settings"
+- **Offline** — gray icon/text, "Offline" status
+
+### Canvas Drawing
+
+Uses `node-canvas` for dynamic button images (144x144 PNG).
+
+**Layout constants (common.js):**
+```javascript
+const LAYOUT = {
+  bulbY: 50,           // Icon vertical position
+  bulbSize: 70,        // Icon size
+  nameY: 104,          // Device name Y position
+  brightnessY: 125,    // Status text Y position
+  statusBarY: 138,     // Status bar Y position
+  statusBarHeight: 6,  // Status bar height
+};
 ```
 
 ## Critical Knowledge

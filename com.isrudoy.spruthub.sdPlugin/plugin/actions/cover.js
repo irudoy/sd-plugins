@@ -1,10 +1,10 @@
 /**
- * Light Action for Sprut.Hub Plugin
- * @module actions/light
+ * Cover (WindowCovering) Action for Sprut.Hub Plugin
+ * @module actions/cover
  */
 
 const { createCanvas } = require('canvas');
-const { log, LIGHT_ACTION, CANVAS_SIZE, CANVAS_CENTER, LAYOUT, COLORS } = require('../lib/common');
+const { log, COVER_ACTION, CANVAS_SIZE, CANVAS_CENTER, LAYOUT, COLORS } = require('../lib/common');
 const { contexts, setContext, getContext, deleteContext, stopTimer } = require('../lib/state');
 const { setImage, sendToPropertyInspector } = require('../lib/websocket');
 const {
@@ -26,27 +26,35 @@ const {
  */
 
 /**
- * @typedef {Object} LightSettings
+ * @typedef {Object} CoverSettings
  * @property {string} [host] - Hub hostname
  * @property {string} [token] - Auth token
  * @property {string} [serial] - Hub serial
- * @property {number} [accessoryId] - Selected light accessory ID
+ * @property {number} [accessoryId] - Selected cover accessory ID
  * @property {string} [accessoryName] - Accessory display name
- * @property {number} [serviceId] - Actual lightbulb service ID (sId)
- * @property {string} [serviceName] - Service display name (for multi-bulb accessories)
- * @property {number} [characteristicId] - Actual On characteristic ID (cId)
- * @property {string} [customName] - Custom display name (overrides auto name)
- * @property {string} [action] - toggle | on | off
+ * @property {number} [serviceId] - Actual cover service ID (sId)
+ * @property {string} [serviceName] - Service display name
+ * @property {number} [targetPositionCharId] - TargetPosition characteristic ID (cId)
+ * @property {number} [currentPositionCharId] - CurrentPosition characteristic ID (for reading)
+ * @property {string} [customName] - Custom display name
+ * @property {string} [action] - toggle | open | close | stop
  */
 
 /**
- * @typedef {Object} LightState
- * @property {boolean} on - Whether light is on
- * @property {number} [brightness] - Brightness level (0-100)
+ * @typedef {Object} CoverState
+ * @property {number} position - Current position (0-100, 0=closed, 100=open)
+ * @property {number} [targetPosition] - Target position (for opening/closing state)
  * @property {string} [error] - Error message
  * @property {boolean} [connecting] - Whether connecting to hub
- * @property {boolean} [offline] - Whether device is offline/unreachable
+ * @property {boolean} [offline] - Whether device is offline
  */
+
+// Cover colors
+const COVER_COLORS = {
+  open: '#4CAF50', // Green - open
+  partial: COLORS.warmYellow, // Yellow - partial
+  closed: COLORS.gray, // Gray - closed
+};
 
 // ============================================================
 // State Listener
@@ -66,7 +74,6 @@ function setupStateListener() {
   const client = getCurrentClient();
   if (!client) return;
 
-  // Reset if client changed (reconnected with different settings)
   if (listenerClient !== client) {
     stateListenerSetup = false;
     listenerClient = client;
@@ -78,34 +85,27 @@ function setupStateListener() {
     const { accessoryId, characteristicId, value } =
       /** @type {import('../lib/spruthub').StateChange} */ (change);
 
-    // Extract actual value from wrapper
     const actualValue = SprutHubClient.extractValue(value);
 
-    // Find all light buttons with this accessoryId
     Object.entries(contexts).forEach(([context, data]) => {
-      // Only process light action contexts
-      if (data.action !== LIGHT_ACTION) return;
+      // Only process cover action contexts
+      if (data.action !== COVER_ACTION) return;
 
-      /** @type {LightSettings} */
-      const settings = /** @type {LightSettings} */ (data.settings || {});
+      /** @type {CoverSettings} */
+      const settings = /** @type {CoverSettings} */ (data.settings || {});
       if (settings.accessoryId === accessoryId) {
-        // Update state based on characteristic
         if (!data.state) {
-          data.state = { on: false };
+          data.state = { position: 0, targetPosition: 0 };
         }
 
-        // Match by stored characteristicId (On) or by type constants
-        if (
-          settings.characteristicId === characteristicId ||
-          characteristicId === SprutHubClient.CHAR_ON
-        ) {
-          data.state.on = Boolean(actualValue);
-        } else if (characteristicId === SprutHubClient.CHAR_BRIGHTNESS) {
-          data.state.brightness = Number(actualValue);
+        // Track current and target positions separately
+        if (settings.currentPositionCharId === characteristicId) {
+          data.state.position = Number(actualValue) || 0;
+        } else if (settings.targetPositionCharId === characteristicId) {
+          data.state.targetPosition = Number(actualValue) || 0;
         }
 
-        // Update button
-        updateButton(context, settings, /** @type {LightState} */ (data.state));
+        updateButton(context, settings, /** @type {CoverState} */ (data.state));
       }
     });
   });
@@ -118,127 +118,105 @@ function setupStateListener() {
 // ============================================================
 
 /**
- * Draw lightbulb icon
+ * Draw cover/blinds icon
  * @param {import('canvas').CanvasRenderingContext2D} ctx - Canvas context
  * @param {number} x - Center X
  * @param {number} y - Center Y
  * @param {number} size - Icon size
  * @param {string} color - Fill color
+ * @param {number} position - Cover position (0-100)
  * @returns {void}
  */
-function drawLightbulb(ctx, x, y, size, color) {
-  const bulbRadius = size * 0.35;
-  const baseWidth = size * 0.35;
-  const baseHeight = size * 0.2;
+function drawCoverIcon(ctx, x, y, size, color, position) {
+  const width = size * 0.6;
+  const height = size * 0.5;
+  const numSlats = 5;
+  const slatHeight = height / numSlats;
+  const openSlats = Math.round((position / 100) * numSlats);
 
+  // Window frame
+  ctx.strokeStyle = color;
+  ctx.lineWidth = 3;
+  ctx.strokeRect(x - width / 2, y - height / 2, width, height);
+
+  // Slats (from top, closed slats are visible)
   ctx.fillStyle = color;
-
-  // Bulb (circle)
-  ctx.beginPath();
-  ctx.arc(x, y - size * 0.1, bulbRadius, 0, Math.PI * 2);
-  ctx.fill();
-
-  // Base (rectangle with rounded bottom)
-  const baseY = y + bulbRadius * 0.5;
-  ctx.fillRect(x - baseWidth / 2, baseY, baseWidth, baseHeight);
-
-  // Base lines
-  ctx.strokeStyle = COLORS.background;
-  ctx.lineWidth = 2;
-  for (let i = 1; i <= 2; i++) {
-    const ly = baseY + (baseHeight / 3) * i;
-    ctx.beginPath();
-    ctx.moveTo(x - baseWidth / 2, ly);
-    ctx.lineTo(x + baseWidth / 2, ly);
-    ctx.stroke();
+  for (let i = 0; i < numSlats - openSlats; i++) {
+    const slatY = y - height / 2 + i * slatHeight;
+    ctx.fillRect(x - width / 2 + 2, slatY + 2, width - 4, slatHeight - 2);
   }
 
-  // Tip
+  // Top bar (valance)
   ctx.fillStyle = color;
-  ctx.beginPath();
-  ctx.moveTo(x - baseWidth / 4, baseY + baseHeight);
-  ctx.lineTo(x + baseWidth / 4, baseY + baseHeight);
-  ctx.lineTo(x, baseY + baseHeight + size * 0.08);
-  ctx.closePath();
-  ctx.fill();
+  ctx.fillRect(x - width / 2 - 4, y - height / 2 - 8, width + 8, 10);
 }
 
 /**
- * Draw light button - On state
- * @param {string} name - Light name
- * @param {number} [brightness] - Brightness level
+ * Get color based on position
+ * @param {number} position
+ * @returns {string}
+ */
+function getPositionColor(position) {
+  if (position >= 95) return COVER_COLORS.open;
+  if (position <= 5) return COVER_COLORS.closed;
+  return COVER_COLORS.partial;
+}
+
+/**
+ * Get position text
+ * @param {number} position
+ * @param {number} [targetPosition]
+ * @returns {string}
+ */
+function getPositionText(position, targetPosition) {
+  // Check if moving
+  if (targetPosition !== undefined && Math.abs(position - targetPosition) > 2) {
+    if (targetPosition > position) return 'Closing...';
+    return 'Opening...';
+  }
+  if (position >= 95) return 'Open';
+  if (position <= 5) return 'Closed';
+  return `${position}%`;
+}
+
+/**
+ * Draw cover button
+ * @param {string} name - Cover name
+ * @param {number} position - Position 0-100
+ * @param {number} [targetPosition] - Target position (for opening/closing state)
  * @returns {string} Base64 PNG data URL
  */
-function drawLightOn(name, brightness) {
+function drawCover(name, position, targetPosition) {
   const canvas = createCanvas(CANVAS_SIZE, CANVAS_SIZE);
   const ctx = canvas.getContext('2d');
 
-  // Black background
   ctx.fillStyle = COLORS.background;
   ctx.fillRect(0, 0, CANVAS_SIZE, CANVAS_SIZE);
 
-  // Lightbulb icon (warm yellow)
-  drawLightbulb(ctx, CANVAS_CENTER, LAYOUT.bulbY, LAYOUT.bulbSize, COLORS.warmYellow);
+  const color = getPositionColor(position);
+  drawCoverIcon(ctx, CANVAS_CENTER, LAYOUT.bulbY, LAYOUT.bulbSize, color, position);
 
-  // Name (bottom)
-  ctx.fillStyle = COLORS.white;
+  ctx.fillStyle = position <= 5 ? COLORS.gray : COLORS.white;
   ctx.font = 'bold 18px sans-serif';
   ctx.textAlign = 'center';
-  let displayName = name || 'Light';
+  let displayName = name || 'Cover';
   if (displayName.length > 12) {
     displayName = displayName.substring(0, 11) + '…';
   }
   ctx.fillText(displayName, CANVAS_CENTER, LAYOUT.nameY);
 
-  // Brightness (if available)
-  if (brightness !== undefined) {
-    ctx.fillStyle = COLORS.warmYellow;
-    ctx.font = 'bold 16px sans-serif';
-    ctx.fillText(brightness + '%', CANVAS_CENTER, LAYOUT.brightnessY);
-  }
+  ctx.fillStyle = color;
+  ctx.font = 'bold 16px sans-serif';
+  ctx.fillText(getPositionText(position, targetPosition), CANVAS_CENTER, LAYOUT.brightnessY);
 
-  // Status indicator line at bottom
-  ctx.fillStyle = COLORS.warmYellow;
+  ctx.fillStyle = color;
   ctx.fillRect(0, LAYOUT.statusBarY, CANVAS_SIZE, LAYOUT.statusBarHeight);
 
   return canvas.toDataURL('image/png');
 }
 
 /**
- * Draw light button - Off state
- * @param {string} name - Light name
- * @returns {string} Base64 PNG data URL
- */
-function drawLightOff(name) {
-  const canvas = createCanvas(CANVAS_SIZE, CANVAS_SIZE);
-  const ctx = canvas.getContext('2d');
-
-  // Black background
-  ctx.fillStyle = COLORS.background;
-  ctx.fillRect(0, 0, CANVAS_SIZE, CANVAS_SIZE);
-
-  // Lightbulb icon (gray)
-  drawLightbulb(ctx, CANVAS_CENTER, LAYOUT.bulbY, LAYOUT.bulbSize, COLORS.gray);
-
-  // Name (bottom)
-  ctx.fillStyle = COLORS.gray;
-  ctx.font = 'bold 18px sans-serif';
-  ctx.textAlign = 'center';
-  let displayName = name || 'Light';
-  if (displayName.length > 12) {
-    displayName = displayName.substring(0, 11) + '…';
-  }
-  ctx.fillText(displayName, CANVAS_CENTER, LAYOUT.nameYOff);
-
-  // Status indicator line at bottom
-  ctx.fillStyle = '#444444';
-  ctx.fillRect(0, LAYOUT.statusBarY, CANVAS_SIZE, LAYOUT.statusBarHeight);
-
-  return canvas.toDataURL('image/png');
-}
-
-/**
- * Draw light button - Error state
+ * Draw cover button - Error state
  * @param {string} message - Error message
  * @returns {string} Base64 PNG data URL
  */
@@ -246,17 +224,14 @@ function drawError(message) {
   const canvas = createCanvas(CANVAS_SIZE, CANVAS_SIZE);
   const ctx = canvas.getContext('2d');
 
-  // Dark red background
   ctx.fillStyle = '#3d1a1a';
   ctx.fillRect(0, 0, CANVAS_SIZE, CANVAS_SIZE);
 
-  // Error icon (!)
   ctx.fillStyle = COLORS.red;
   ctx.font = 'bold 48px sans-serif';
   ctx.textAlign = 'center';
   ctx.fillText('!', CANVAS_CENTER, 65);
 
-  // Error message
   ctx.fillStyle = COLORS.white;
   ctx.font = 'bold 14px sans-serif';
   let displayMessage = message || 'Error';
@@ -265,7 +240,6 @@ function drawError(message) {
   }
   ctx.fillText(displayMessage, CANVAS_CENTER, 100);
 
-  // Status indicator line at bottom
   ctx.fillStyle = COLORS.red;
   ctx.fillRect(0, LAYOUT.statusBarY, CANVAS_SIZE, LAYOUT.statusBarHeight);
 
@@ -273,27 +247,23 @@ function drawError(message) {
 }
 
 /**
- * Draw light button - Connecting state
+ * Draw cover button - Connecting state
  * @returns {string} Base64 PNG data URL
  */
 function drawConnecting() {
   const canvas = createCanvas(CANVAS_SIZE, CANVAS_SIZE);
   const ctx = canvas.getContext('2d');
 
-  // Black background
   ctx.fillStyle = COLORS.background;
   ctx.fillRect(0, 0, CANVAS_SIZE, CANVAS_SIZE);
 
-  // Lightbulb icon (yellow)
-  drawLightbulb(ctx, CANVAS_CENTER, LAYOUT.bulbY, LAYOUT.bulbSize, COLORS.yellow);
+  drawCoverIcon(ctx, CANVAS_CENTER, LAYOUT.bulbY, LAYOUT.bulbSize, COLORS.yellow, 50);
 
-  // "Connecting..." text
   ctx.fillStyle = COLORS.yellow;
   ctx.font = 'bold 16px sans-serif';
   ctx.textAlign = 'center';
   ctx.fillText('Connecting...', CANVAS_CENTER, LAYOUT.nameYOff);
 
-  // Status indicator line at bottom
   ctx.fillStyle = COLORS.yellow;
   ctx.fillRect(0, LAYOUT.statusBarY, CANVAS_SIZE, LAYOUT.statusBarHeight);
 
@@ -301,27 +271,23 @@ function drawConnecting() {
 }
 
 /**
- * Draw light button - Not configured state
+ * Draw cover button - Not configured state
  * @returns {string} Base64 PNG data URL
  */
 function drawNotConfigured() {
   const canvas = createCanvas(CANVAS_SIZE, CANVAS_SIZE);
   const ctx = canvas.getContext('2d');
 
-  // Dark blue background
   ctx.fillStyle = '#1a1a2e';
   ctx.fillRect(0, 0, CANVAS_SIZE, CANVAS_SIZE);
 
-  // Lightbulb icon (gray)
-  drawLightbulb(ctx, CANVAS_CENTER, 50, LAYOUT.bulbSizeSmall, COLORS.gray);
+  drawCoverIcon(ctx, CANVAS_CENTER, 50, LAYOUT.bulbSizeSmall, COLORS.gray, 50);
 
-  // "Setup" text
   ctx.fillStyle = COLORS.white;
   ctx.font = 'bold 20px sans-serif';
   ctx.textAlign = 'center';
   ctx.fillText('Setup', CANVAS_CENTER, 110);
 
-  // Subtitle
   ctx.fillStyle = COLORS.gray;
   ctx.font = '14px sans-serif';
   ctx.fillText('Open settings', CANVAS_CENTER, 130);
@@ -330,37 +296,32 @@ function drawNotConfigured() {
 }
 
 /**
- * Draw light button - Offline state
- * @param {string} name - Light name
+ * Draw cover button - Offline state
+ * @param {string} name - Cover name
  * @returns {string} Base64 PNG data URL
  */
 function drawOffline(name) {
   const canvas = createCanvas(CANVAS_SIZE, CANVAS_SIZE);
   const ctx = canvas.getContext('2d');
 
-  // Dark background
   ctx.fillStyle = COLORS.background;
   ctx.fillRect(0, 0, CANVAS_SIZE, CANVAS_SIZE);
 
-  // Lightbulb icon (red/unavailable color)
-  drawLightbulb(ctx, CANVAS_CENTER, LAYOUT.bulbY, LAYOUT.bulbSize, COLORS.unavailable);
+  drawCoverIcon(ctx, CANVAS_CENTER, LAYOUT.bulbY, LAYOUT.bulbSize, COLORS.unavailable, 50);
 
-  // Name
   ctx.fillStyle = COLORS.unavailable;
   ctx.font = 'bold 18px sans-serif';
   ctx.textAlign = 'center';
-  let displayName = name || 'Light';
+  let displayName = name || 'Cover';
   if (displayName.length > 12) {
     displayName = displayName.substring(0, 11) + '…';
   }
   ctx.fillText(displayName, CANVAS_CENTER, LAYOUT.nameY);
 
-  // "Offline" text
   ctx.fillStyle = COLORS.unavailable;
   ctx.font = 'bold 16px sans-serif';
   ctx.fillText('Offline', CANVAS_CENTER, LAYOUT.brightnessY);
 
-  // Status indicator line at bottom
   ctx.fillStyle = COLORS.unavailable;
   ctx.fillRect(0, LAYOUT.statusBarY, CANVAS_SIZE, LAYOUT.statusBarHeight);
 
@@ -373,27 +334,24 @@ function drawOffline(name) {
 
 /**
  * Get display name for button
- * Priority: customName > serviceName (if different) > accessoryName
- * @param {LightSettings} settings
+ * @param {CoverSettings} settings
  * @returns {string}
  */
 function getDisplayName(settings) {
-  // Custom name has highest priority
   if (settings.customName) {
     return settings.customName;
   }
-  // If serviceName exists and is different from accessoryName, use it
   if (settings.serviceName && settings.serviceName !== settings.accessoryName) {
     return settings.serviceName;
   }
-  return settings.accessoryName || 'Light';
+  return settings.accessoryName || 'Cover';
 }
 
 /**
  * Update button image
  * @param {string} context - Action context
- * @param {LightSettings} settings - Light settings
- * @param {LightState} [state] - Current state
+ * @param {CoverSettings} settings - Cover settings
+ * @param {CoverState} [state] - Current state
  * @returns {void}
  */
 function updateButton(context, settings, state) {
@@ -407,39 +365,36 @@ function updateButton(context, settings, state) {
     imageData = drawNotConfigured();
   } else if (state?.offline) {
     imageData = drawOffline(getDisplayName(settings));
-  } else if (state?.on) {
-    imageData = drawLightOn(getDisplayName(settings), state.brightness);
   } else {
-    imageData = drawLightOff(getDisplayName(settings));
+    imageData = drawCover(getDisplayName(settings), state?.position ?? 0, state?.targetPosition);
   }
 
   setImage(context, imageData);
 }
 
 // ============================================================
-// Light State Fetch
+// Cover State Fetch
 // ============================================================
 
 /**
- * Fetch current light state from hub
- * @param {LightSettings} settings - Light settings
- * @returns {Promise<LightState>}
+ * Fetch current cover state from hub
+ * @param {CoverSettings} settings - Cover settings
+ * @returns {Promise<CoverState>}
  */
-async function fetchLightState(settings) {
+async function fetchCoverState(settings) {
   const { host, token, serial, accessoryId, serviceId } = settings;
 
   if (!host || !token || !serial || !accessoryId) {
-    return { on: false, error: 'Not configured' };
+    return { position: 0, error: 'Not configured' };
   }
 
   try {
     const client = getClient(host, token, serial);
 
     if (!client) {
-      return { on: false, error: 'Missing connection parameters' };
+      return { position: 0, error: 'Missing connection parameters' };
     }
 
-    // Use waitForConnection instead of manual event handling
     await client.waitForConnection();
 
     setupStateListener();
@@ -448,38 +403,33 @@ async function fetchLightState(settings) {
     const accessory = accessories.find((a) => a.id === accessoryId);
 
     if (!accessory) {
-      return { on: false, error: 'Light not found' };
+      return { position: 0, error: 'Cover not found' };
     }
 
-    // Find lightbulb service by stored serviceId or by type
     const service = serviceId
       ? accessory.services?.find((s) => s.sId === serviceId)
-      : SprutHubClient.findLightbulbService(accessory);
+      : SprutHubClient.findCoverService(accessory);
 
     if (!service) {
-      return { on: false, error: 'No lightbulb service' };
+      return { position: 0, error: 'No cover service' };
     }
 
-    // Check if device is offline
     const isOffline = SprutHubClient.isAccessoryOffline(accessory);
-    log('[Light] Accessory online status:', { online: accessory.online, isOffline });
 
-    // Get characteristics
-    const onChar = SprutHubClient.findOnCharacteristic(service);
-    const brightnessChar = SprutHubClient.findBrightnessCharacteristic(service);
-
-    // Extract value from the nested structure (can be boolValue, doubleValue, etc.)
-    const onValue = SprutHubClient.extractValue(onChar?.control?.value);
-    const brightnessValue = SprutHubClient.extractValue(brightnessChar?.control?.value);
+    // Get current position (read-only) and target position
+    const currentPositionChar = SprutHubClient.findCurrentPositionCharacteristic(service);
+    const targetPositionChar = SprutHubClient.findTargetPositionCharacteristic(service);
+    const currentValue = SprutHubClient.extractValue(currentPositionChar?.control?.value);
+    const targetValue = SprutHubClient.extractValue(targetPositionChar?.control?.value);
 
     return {
-      on: Boolean(onValue),
-      brightness: brightnessValue !== undefined ? Number(brightnessValue) : undefined,
+      position: Number(currentValue) || 0,
+      targetPosition: Number(targetValue) || 0,
       offline: isOffline,
     };
   } catch (err) {
-    log('[Light] Error fetching state:', err);
-    return { on: false, error: err instanceof Error ? err.message : 'Unknown error' };
+    log('[Cover] Error fetching state:', err);
+    return { position: 0, error: err instanceof Error ? err.message : 'Unknown error' };
   }
 }
 
@@ -494,15 +444,13 @@ async function fetchLightState(settings) {
  * @returns {void}
  */
 function onWillAppear(context, payload) {
-  /** @type {LightSettings} */
-  const settings = /** @type {LightSettings} */ (payload?.settings || {});
-  setContext(context, { settings, action: LIGHT_ACTION, state: { on: false, connecting: true } });
+  /** @type {CoverSettings} */
+  const settings = /** @type {CoverSettings} */ (payload?.settings || {});
+  setContext(context, { settings, action: COVER_ACTION, state: { position: 0, connecting: true } });
 
-  // Show connecting state
-  updateButton(context, settings, { on: false, connecting: true });
+  updateButton(context, settings, { position: 0, connecting: true });
 
-  // Fetch initial state
-  fetchLightState(settings).then((state) => {
+  fetchCoverState(settings).then((state) => {
     const ctx = getContext(context);
     if (ctx) {
       ctx.state = state;
@@ -520,7 +468,6 @@ function onWillDisappear(context) {
   stopTimer(context);
   deleteContext(context);
 
-  // Disconnect if no more contexts
   if (Object.keys(contexts).length === 0) {
     disconnectClient();
     stateListenerSetup = false;
@@ -529,62 +476,66 @@ function onWillDisappear(context) {
 }
 
 /**
- * Handle keyUp event - Toggle light
+ * Handle keyUp event - Control cover
  * @param {string} context - Action context
  * @param {KeyPayload} payload - Event payload
  * @returns {Promise<void>}
  */
 async function onKeyUp(context, payload) {
-  /** @type {LightSettings} */
-  const settings = /** @type {LightSettings} */ (
+  /** @type {CoverSettings} */
+  const settings = /** @type {CoverSettings} */ (
     payload?.settings || getContext(context)?.settings || {}
   );
-  const { host, token, serial, accessoryId, serviceId, characteristicId, action } = settings;
+  const { host, token, serial, accessoryId, serviceId, targetPositionCharId, action } = settings;
 
   if (!host || !token || !serial || !accessoryId) {
-    log('[Light] onKeyUp: missing required settings');
+    log('[Cover] onKeyUp: missing required settings');
     return;
   }
 
-  if (!serviceId || !characteristicId) {
-    log('[Light] onKeyUp: missing serviceId or characteristicId - please reconfigure the light');
+  if (!serviceId || !targetPositionCharId) {
+    log('[Cover] onKeyUp: missing serviceId or targetPositionCharId');
     return;
   }
 
   try {
     const client = getClient(host, token, serial);
     if (!client || !client.isConnected()) {
-      log('[Light] onKeyUp: client not connected');
+      log('[Cover] onKeyUp: client not connected');
       return;
     }
 
     const ctx = getContext(context);
-    /** @type {LightState} */
-    const currentState = /** @type {LightState} */ (ctx?.state || { on: false });
+    /** @type {CoverState} */
+    const currentState = /** @type {CoverState} */ (ctx?.state || { position: 0 });
 
-    // Determine new state based on action
-    let newValue;
-    if (action === 'on') {
-      newValue = true;
-    } else if (action === 'off') {
-      newValue = false;
+    // Determine new position based on action
+    let newPosition;
+    if (action === 'open') {
+      newPosition = 100;
+    } else if (action === 'close') {
+      newPosition = 0;
     } else {
-      // toggle (default)
-      newValue = !currentState.on;
+      // toggle - if mostly open, close; if mostly closed, open
+      newPosition = currentState.position > 50 ? 0 : 100;
     }
 
-    log('[Light] Toggling light:', { accessoryId, serviceId, characteristicId, newValue });
+    log('[Cover] Setting cover position:', {
+      accessoryId,
+      serviceId,
+      targetPositionCharId,
+      newPosition,
+    });
 
-    // Update characteristic using stored IDs
-    await client.updateCharacteristic(accessoryId, serviceId, characteristicId, newValue);
+    // Update TargetPosition characteristic
+    await client.updateCharacteristic(accessoryId, serviceId, targetPositionCharId, newPosition);
 
-    // Optimistic update
     if (ctx) {
-      ctx.state = { ...currentState, on: newValue };
-      updateButton(context, settings, /** @type {LightState} */ (ctx.state));
+      ctx.state = { ...currentState, position: newPosition };
+      updateButton(context, settings, /** @type {CoverState} */ (ctx.state));
     }
   } catch (err) {
-    log('[Light] Error toggling:', err);
+    log('[Cover] Error controlling:', err);
   }
 }
 
@@ -603,7 +554,6 @@ function onSendToPlugin(context, payload) {
   const token = typeof payload.token === 'string' ? payload.token : '';
   const serial = typeof payload.serial === 'string' ? payload.serial : '';
 
-  // Handle specific events
   if (payload.event) {
     switch (payload.event) {
       case 'testConnection':
@@ -616,8 +566,7 @@ function onSendToPlugin(context, payload) {
     }
   }
 
-  // Handle settings update from PI (when light is selected)
-  if (payload.accessoryId && payload.serviceId && payload.characteristicId) {
+  if (payload.accessoryId && payload.serviceId && payload.targetPositionCharId) {
     handleSettingsFromPI(context, payload);
     return true;
   }
@@ -632,7 +581,7 @@ function onSendToPlugin(context, payload) {
  * @returns {void}
  */
 function handleSettingsFromPI(context, payload) {
-  /** @type {LightSettings} */
+  /** @type {CoverSettings} */
   const settings = {
     host: typeof payload.host === 'string' ? payload.host : undefined,
     token: typeof payload.token === 'string' ? payload.token : undefined,
@@ -641,40 +590,38 @@ function handleSettingsFromPI(context, payload) {
     accessoryName: typeof payload.accessoryName === 'string' ? payload.accessoryName : undefined,
     serviceId: typeof payload.serviceId === 'number' ? payload.serviceId : undefined,
     serviceName: typeof payload.serviceName === 'string' ? payload.serviceName : undefined,
-    characteristicId:
-      typeof payload.characteristicId === 'number' ? payload.characteristicId : undefined,
+    targetPositionCharId:
+      typeof payload.targetPositionCharId === 'number' ? payload.targetPositionCharId : undefined,
+    currentPositionCharId:
+      typeof payload.currentPositionCharId === 'number' ? payload.currentPositionCharId : undefined,
     customName: typeof payload.customName === 'string' ? payload.customName : undefined,
     action: typeof payload.action === 'string' ? payload.action : undefined,
   };
 
-  log('[Light] Received settings from PI:', settings);
+  log('[Cover] Received settings from PI:', settings);
 
   const ctx = getContext(context);
-  const oldSettings = /** @type {LightSettings|undefined} */ (ctx?.settings);
+  const oldSettings = /** @type {CoverSettings|undefined} */ (ctx?.settings);
 
-  // Check if device actually changed
   const deviceChanged =
     !oldSettings ||
     oldSettings.accessoryId !== settings.accessoryId ||
     oldSettings.serviceId !== settings.serviceId;
 
-  // Update context
   if (ctx) {
     ctx.settings = settings;
   } else {
-    setContext(context, { settings, state: { on: false } });
+    setContext(context, { settings, state: { position: 0 } });
   }
 
-  // If device didn't change and we have state, just update button with existing state
   if (!deviceChanged && ctx?.state) {
-    updateButton(context, settings, /** @type {LightState} */ (ctx.state));
+    updateButton(context, settings, /** @type {CoverState} */ (ctx.state));
     return;
   }
 
-  // Device changed or no state yet - fetch new state
-  updateButton(context, settings, { on: false, connecting: true });
+  updateButton(context, settings, { position: 0, connecting: true });
 
-  fetchLightState(settings).then((state) => {
+  fetchCoverState(settings).then((state) => {
     const c = getContext(context);
     if (c) {
       c.state = state;
@@ -691,7 +638,7 @@ function handleSettingsFromPI(context, payload) {
  * @returns {Promise<void>}
  */
 async function handleTestConnection(host, token, serial) {
-  log('[Light] handleTestConnection:', { host, token: token ? '***' : undefined, serial });
+  log('[Cover] handleTestConnection:', { host, token: token ? '***' : undefined, serial });
 
   try {
     const client = getClient(host, token, serial);
@@ -709,29 +656,28 @@ async function handleTestConnection(host, token, serial) {
 
     const [rooms, accessories] = await Promise.all([client.getRooms(), client.getAccessories()]);
 
-    log('[Light] Got rooms:', rooms.length, 'accessories:', accessories.length);
+    log('[Cover] Got rooms:', rooms.length, 'accessories:', accessories.length);
 
-    // Filter lightbulb accessories
-    const lights = accessories.filter((a) => {
-      const hasLightbulb = SprutHubClient.findLightbulbService(a) !== undefined;
-      if (hasLightbulb) {
-        log('[Light] Found lightbulb:', a.name, a.id);
+    const devices = accessories.filter((a) => {
+      const hasCover = SprutHubClient.findCoverService(a) !== undefined;
+      if (hasCover) {
+        log('[Cover] Found cover:', a.name, a.id);
       }
-      return hasLightbulb;
+      return hasCover;
     });
 
-    log('[Light] Filtered lights:', lights.length);
+    log('[Cover] Filtered covers:', devices.length);
 
     sendToPropertyInspector({
       event: 'testResult',
       success: true,
       rooms,
-      lights,
+      devices,
     });
 
-    log('[Light] Sent testResult to PI');
+    log('[Cover] Sent testResult to PI');
   } catch (err) {
-    log('[Light] testConnection error:', err);
+    log('[Cover] testConnection error:', err);
     sendToPropertyInspector({
       event: 'testResult',
       success: false,
@@ -748,7 +694,7 @@ async function handleTestConnection(host, token, serial) {
  * @returns {Promise<void>}
  */
 async function handleGetDevices(host, token, serial) {
-  log('[Light] handleGetDevices:', { host, token: token ? '***' : undefined, serial });
+  log('[Cover] handleGetDevices:', { host, token: token ? '***' : undefined, serial });
 
   try {
     const client = getClient(host, token, serial);
@@ -765,18 +711,17 @@ async function handleGetDevices(host, token, serial) {
 
     const [rooms, accessories] = await Promise.all([client.getRooms(), client.getAccessories()]);
 
-    // Filter lightbulb accessories
-    const lights = accessories.filter((a) => SprutHubClient.findLightbulbService(a) !== undefined);
+    const devices = accessories.filter((a) => SprutHubClient.findCoverService(a) !== undefined);
 
-    log('[Light] handleGetDevices: found', rooms.length, 'rooms,', lights.length, 'lights');
+    log('[Cover] handleGetDevices: found', rooms.length, 'rooms,', devices.length, 'covers');
 
     sendToPropertyInspector({
       event: 'deviceList',
       rooms,
-      lights,
+      devices,
     });
 
-    log('[Light] Sent deviceList to PI');
+    log('[Cover] Sent deviceList to PI');
   } catch (err) {
     sendToPropertyInspector({
       event: 'error',
@@ -788,14 +733,13 @@ async function handleGetDevices(host, token, serial) {
 /**
  * Handle settings update
  * @param {string} context - Action context
- * @param {LightSettings} settings - New settings
+ * @param {CoverSettings} settings - New settings
  * @returns {void}
  */
 function onSettingsUpdate(context, settings) {
   const ctx = getContext(context);
-  const oldSettings = /** @type {LightSettings|undefined} */ (ctx?.settings);
+  const oldSettings = /** @type {CoverSettings|undefined} */ (ctx?.settings);
 
-  // Check if device actually changed
   const deviceChanged =
     !oldSettings ||
     oldSettings.accessoryId !== settings.accessoryId ||
@@ -805,16 +749,14 @@ function onSettingsUpdate(context, settings) {
     ctx.settings = settings;
   }
 
-  // If device didn't change and we have state, just update button with existing state
   if (!deviceChanged && ctx?.state) {
-    updateButton(context, settings, /** @type {LightState} */ (ctx.state));
+    updateButton(context, settings, /** @type {CoverState} */ (ctx.state));
     return;
   }
 
-  // Device changed or no state yet - fetch new state
-  updateButton(context, settings, { on: false, connecting: true });
+  updateButton(context, settings, { position: 0, connecting: true });
 
-  fetchLightState(settings).then((state) => {
+  fetchCoverState(settings).then((state) => {
     const c = getContext(context);
     if (c) {
       c.state = state;
@@ -830,8 +772,8 @@ function onSettingsUpdate(context, settings) {
  * @returns {void}
  */
 function onDidReceiveSettings(context, payload) {
-  /** @type {LightSettings} */
-  const settings = /** @type {LightSettings} */ (payload?.settings || {});
+  /** @type {CoverSettings} */
+  const settings = /** @type {CoverSettings} */ (payload?.settings || {});
   onSettingsUpdate(context, settings);
 }
 
@@ -842,10 +784,9 @@ function onDidReceiveSettings(context, payload) {
  */
 function onPropertyInspectorDidAppear(context) {
   const ctx = getContext(context);
-  /** @type {LightSettings} */
-  const settings = /** @type {LightSettings} */ (ctx?.settings || {});
+  /** @type {CoverSettings} */
+  const settings = /** @type {CoverSettings} */ (ctx?.settings || {});
 
-  // If we have connection settings, send device list
   if (settings.host && settings.token && settings.serial) {
     handleGetDevices(settings.host, settings.token, settings.serial);
   }
