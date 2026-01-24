@@ -1,11 +1,11 @@
 {
   "Actions": [
     {
-      "Icon": "static/img/lightIcon",
+      "Icon": "static/img/spruthubIcon",
       "Name": "Light",
       "States": [
         {
-          "Image": "static/img/lightAction"
+          "Image": "static/img/commonAction"
         }
       ],
       "Controllers": ["Keypad", "Knob"],
@@ -14,11 +14,11 @@
       "Tooltip": "Control Sprut.Hub lights"
     },
     {
-      "Icon": "static/img/lightIcon",
+      "Icon": "static/img/spruthubIcon",
       "Name": "Switch",
       "States": [
         {
-          "Image": "static/img/lightAction"
+          "Image": "static/img/commonAction"
         }
       ],
       "Controllers": ["Keypad"],
@@ -27,11 +27,11 @@
       "Tooltip": "Control Sprut.Hub switches"
     },
     {
-      "Icon": "static/img/lightIcon",
+      "Icon": "static/img/spruthubIcon",
       "Name": "Outlet",
       "States": [
         {
-          "Image": "static/img/lightAction"
+          "Image": "static/img/commonAction"
         }
       ],
       "Controllers": ["Keypad"],
@@ -40,11 +40,11 @@
       "Tooltip": "Control Sprut.Hub outlets"
     },
     {
-      "Icon": "static/img/lightIcon",
+      "Icon": "static/img/spruthubIcon",
       "Name": "Lock",
       "States": [
         {
-          "Image": "static/img/lightAction"
+          "Image": "static/img/commonAction"
         }
       ],
       "Controllers": ["Keypad"],
@@ -53,11 +53,11 @@
       "Tooltip": "Control Sprut.Hub locks"
     },
     {
-      "Icon": "static/img/lightIcon",
+      "Icon": "static/img/spruthubIcon",
       "Name": "Cover",
       "States": [
         {
-          "Image": "static/img/lightAction"
+          "Image": "static/img/commonAction"
         }
       ],
       "Controllers": ["Keypad", "Knob"],
@@ -66,11 +66,11 @@
       "Tooltip": "Control Sprut.Hub window coverings"
     },
     {
-      "Icon": "static/img/lightIcon",
+      "Icon": "static/img/spruthubIcon",
       "Name": "Thermostat",
       "States": [
         {
-          "Image": "static/img/lightAction"
+          "Image": "static/img/commonAction"
         }
       ],
       "Controllers": ["Keypad", "Knob"],
@@ -79,11 +79,11 @@
       "Tooltip": "Control Sprut.Hub thermostats"
     },
     {
-      "Icon": "static/img/lightIcon",
+      "Icon": "static/img/spruthubIcon",
       "Name": "Sensor",
       "States": [
         {
-          "Image": "static/img/lightAction"
+          "Image": "static/img/commonAction"
         }
       ],
       "Controllers": ["Keypad"],
@@ -92,11 +92,11 @@
       "Tooltip": "Display Sprut.Hub sensor values"
     },
     {
-      "Icon": "static/img/lightIcon",
+      "Icon": "static/img/spruthubIcon",
       "Name": "Button",
       "States": [
         {
-          "Image": "static/img/lightAction"
+          "Image": "static/img/commonAction"
         }
       ],
       "Controllers": ["Keypad"],

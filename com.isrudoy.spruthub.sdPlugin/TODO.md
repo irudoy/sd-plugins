@@ -1,5 +1,3 @@
-- переименовать lightIcon -> spruthubIcon
-- static/img/lightAction -> commonAction
 - решить проблемы с типами, например com.isrudoy.spruthub.sdPlugin/outlet/index.js:36 тут сейчас SprutHubPI any
 - добавить Button в dial knob
 - Добавить Action для запуска сценария как button/dial
