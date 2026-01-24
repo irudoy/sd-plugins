@@ -13,53 +13,7 @@
 <body>
     <div class="sdpi-wrapper" style="display: none;">
 
-        <!-- Connection Settings Button -->
-        <div class="sdpi-item">
-            <div class="sdpi-item-label empty"></div>
-            <button class="sdpi-item-value connection-btn" id="connectionBtn" onclick="SprutHubPI.toggleConnectionSettings()">Connection Settings</button>
-        </div>
-
-        <!-- Connection Status -->
-        <div id="connectionStatusText" class="connection-status">
-            Loading...
-        </div>
-
-        <!-- Connection Settings Panel (hidden by default) -->
-        <div id="connectionSettings">
-            <div class="sdpi-heading">Sprut.Hub Connection</div>
-
-            <!-- Host -->
-            <div class="sdpi-item">
-                <div class="sdpi-item-label">Host</div>
-                <input class="sdpi-item-value" type="text" id="host" placeholder="spruthub.local or IP" onchange="SprutHubPI.saveSettings()">
-            </div>
-
-            <!-- Token -->
-            <div class="sdpi-item">
-                <div class="sdpi-item-label">Token</div>
-                <input class="sdpi-item-value" type="password" id="token" placeholder="API token" onchange="SprutHubPI.saveSettings()">
-            </div>
-
-            <!-- Serial -->
-            <div class="sdpi-item">
-                <div class="sdpi-item-label">Serial</div>
-                <input class="sdpi-item-value" type="text" id="serial" placeholder="Hub serial number" onchange="SprutHubPI.saveSettings()">
-            </div>
-
-            <!-- Test Connection Button -->
-            <div class="sdpi-item">
-                <div class="sdpi-item-label empty"></div>
-                <button class="sdpi-item-value" id="testButton" onclick="SprutHubPI.testConnection()">Test Connection</button>
-            </div>
-
-            <!-- Status Message -->
-            <div class="sdpi-item">
-                <div class="sdpi-item-label empty"></div>
-                <div class="sdpi-item-value">
-                    <div id="statusMessage" class="status-message"></div>
-                </div>
-            </div>
-        </div>
+        <div id="connectionSettingsContainer"></div>
 
         <div class="sdpi-heading">Button Selection</div>
 

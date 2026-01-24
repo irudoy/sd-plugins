@@ -12,34 +12,7 @@
 </head>
 <body>
     <div class="sdpi-wrapper" style="display: none;">
-        <div class="sdpi-item">
-            <div class="sdpi-item-label empty"></div>
-            <button class="sdpi-item-value connection-btn" id="connectionBtn" onclick="SprutHubPI.toggleConnectionSettings()">Connection Settings</button>
-        </div>
-        <div id="connectionStatusText" class="connection-status">Loading...</div>
-        <div id="connectionSettings">
-            <div class="sdpi-heading">Sprut.Hub Connection</div>
-            <div class="sdpi-item">
-                <div class="sdpi-item-label">Host</div>
-                <input class="sdpi-item-value" type="text" id="host" placeholder="spruthub.local or IP" onchange="SprutHubPI.saveSettings()">
-            </div>
-            <div class="sdpi-item">
-                <div class="sdpi-item-label">Token</div>
-                <input class="sdpi-item-value" type="password" id="token" placeholder="API token" onchange="SprutHubPI.saveSettings()">
-            </div>
-            <div class="sdpi-item">
-                <div class="sdpi-item-label">Serial</div>
-                <input class="sdpi-item-value" type="text" id="serial" placeholder="Hub serial number" onchange="SprutHubPI.saveSettings()">
-            </div>
-            <div class="sdpi-item">
-                <div class="sdpi-item-label empty"></div>
-                <button class="sdpi-item-value" id="testButton" onclick="SprutHubPI.testConnection()">Test Connection</button>
-            </div>
-            <div class="sdpi-item">
-                <div class="sdpi-item-label empty"></div>
-                <div class="sdpi-item-value"><div id="statusMessage" class="status-message"></div></div>
-            </div>
-        </div>
+        <div id="connectionSettingsContainer"></div>
         <div class="sdpi-heading">Outlet Selection</div>
         <div class="sdpi-item">
             <div class="sdpi-item-label">Room</div>

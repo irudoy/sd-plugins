@@ -92,10 +92,54 @@ let piConfig = null;
 const $dom = {};
 
 /**
+ * Generate Connection Settings HTML
+ * @returns {string}
+ */
+function renderConnectionSettings() {
+  return `
+    <div class="sdpi-item">
+      <div class="sdpi-item-label empty"></div>
+      <button class="sdpi-item-value connection-btn" id="connectionBtn" onclick="SprutHubPI.toggleConnectionSettings()">Connection Settings</button>
+    </div>
+    <div id="connectionStatusText" class="connection-status">Loading...</div>
+    <div id="connectionSettings">
+      <div class="sdpi-heading">Sprut.Hub Connection</div>
+      <div class="sdpi-item">
+        <div class="sdpi-item-label">Host</div>
+        <input class="sdpi-item-value" type="text" id="host" placeholder="spruthub.local or IP" onchange="SprutHubPI.saveSettings()">
+      </div>
+      <div class="sdpi-item">
+        <div class="sdpi-item-label">Token</div>
+        <input class="sdpi-item-value" type="password" id="token" placeholder="API token" onchange="SprutHubPI.saveSettings()">
+      </div>
+      <div class="sdpi-item">
+        <div class="sdpi-item-label">Serial</div>
+        <input class="sdpi-item-value" type="text" id="serial" placeholder="Hub serial number" onchange="SprutHubPI.saveSettings()">
+      </div>
+      <div class="sdpi-item">
+        <div class="sdpi-item-label empty"></div>
+        <button class="sdpi-item-value" id="testButton" onclick="SprutHubPI.testConnection()">Test Connection</button>
+      </div>
+      <div class="sdpi-item">
+        <div class="sdpi-item-label empty"></div>
+        <div class="sdpi-item-value">
+          <div id="statusMessage" class="status-message"></div>
+        </div>
+      </div>
+    </div>`;
+}
+
+/**
  * Initialize DOM element cache
  * @param {string} deviceSelectId - ID of device select element
  */
 function initDom(deviceSelectId) {
+  // Inject connection settings HTML if container exists
+  const container = document.getElementById('connectionSettingsContainer');
+  if (container) {
+    container.innerHTML = renderConnectionSettings();
+  }
+
   $dom.main = document.querySelector('.sdpi-wrapper');
   $dom.connectionBtn = document.getElementById('connectionBtn');
   $dom.connectionStatusText = document.getElementById('connectionStatusText');
