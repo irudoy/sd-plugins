@@ -6,7 +6,7 @@
  */
 
 const { SENSOR_ACTION, COLORS } = require('../lib/common');
-const { BaseAction, SprutHubClient, mapBaseSettings } = require('../lib/base-action');
+const { BaseAction, SprutHub, mapBaseSettings } = require('../lib/base-action');
 const { getContext } = require('../lib/state');
 const { createButtonCanvas, CANVAS_CENTER } = require('../lib/draw-common');
 
@@ -294,29 +294,28 @@ const sensorAction = new BaseAction({
   drawIcon: (ctx, x, y, size, color) => drawTemperatureIcon(ctx, x, y, size, color),
   initialState: { value: 0, sensorType: 'temperature' },
 
-  findService: (accessory) => SprutHubClient.findSensorService(accessory),
+  findService: (accessory) => SprutHub.findSensorService(accessory),
 
   extractState: (_accessory, service, settings) => {
-    const sensorType =
-      SprutHubClient.getSensorType(service) || settings.sensorType || 'temperature';
+    const sensorType = SprutHub.getSensorType(service) || settings.sensorType || 'temperature';
 
     let valueChar;
     switch (sensorType) {
       case 'temperature':
-        valueChar = SprutHubClient.findCurrentTempCharacteristic(service);
+        valueChar = SprutHub.findCurrentTempCharacteristic(service);
         break;
       case 'humidity':
-        valueChar = SprutHubClient.findCurrentHumidityCharacteristic(service);
+        valueChar = SprutHub.findCurrentHumidityCharacteristic(service);
         break;
       case 'motion':
-        valueChar = SprutHubClient.findMotionDetectedCharacteristic(service);
+        valueChar = SprutHub.findMotionDetectedCharacteristic(service);
         break;
       case 'contact':
-        valueChar = SprutHubClient.findContactStateCharacteristic(service);
+        valueChar = SprutHub.findContactStateCharacteristic(service);
         break;
     }
 
-    const rawValue = SprutHubClient.extractValue(valueChar?.control?.value);
+    const rawValue = SprutHub.extractValue(valueChar?.control?.value);
     const value =
       sensorType === 'motion' || sensorType === 'contact'
         ? Boolean(rawValue) || Number(rawValue) === 1

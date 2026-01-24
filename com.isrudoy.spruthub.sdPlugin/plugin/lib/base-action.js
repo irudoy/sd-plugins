@@ -18,7 +18,7 @@ const {
   clearUpdateTimestamp,
 } = require('./state');
 const { setImage, sendToPropertyInspector } = require('./websocket');
-const { SprutHubClient, getClient, disconnectClient, getCurrentClient } = require('./spruthub');
+const { SprutHub, getClient, disconnectClient, getCurrentClient } = require('./spruthub');
 const {
   drawError,
   drawConnectingWithIcon,
@@ -128,7 +128,7 @@ const {
 /**
  * Key handler function - handles key press
  * @callback KeyHandlerFn
- * @param {SprutHubClient} client - Connected client
+ * @param {SprutHub} client - Connected client
  * @param {BaseSettings} settings - Current settings
  * @param {BaseState} state - Current state
  * @returns {Promise<BaseState|null>} - New state or null for no change
@@ -137,7 +137,7 @@ const {
 /**
  * Dial rotation handler function - handles dial rotation
  * @callback DialHandlerFn
- * @param {SprutHubClient} client - Connected client
+ * @param {SprutHub} client - Connected client
  * @param {BaseSettings} settings - Current settings
  * @param {BaseState} state - Current state
  * @param {{ticks: number}} payload - Dial payload with ticks
@@ -215,7 +215,7 @@ function mapBaseSettings(payload) {
 /**
  * Standard toggle key up handler for on/off devices (light, switch, outlet)
  * Handles 'on', 'off', and 'toggle' actions
- * @param {SprutHubClient} client - Connected client
+ * @param {SprutHub} client - Connected client
  * @param {BaseSettings} settings - Current settings
  * @param {BaseState} currentState - Current state
  * @returns {Promise<BaseState|null>} - New state or null
@@ -247,10 +247,7 @@ async function handleToggleKeyUp(client, settings, currentState) {
  * @returns {BaseState} - Updated state
  */
 function handleOnOffStateChange(state, settings, characteristicId, value) {
-  if (
-    settings.characteristicId === characteristicId ||
-    characteristicId === SprutHubClient.CHAR_ON
-  ) {
+  if (settings.characteristicId === characteristicId || characteristicId === SprutHub.CHAR_ON) {
     return { ...state, on: Boolean(value) };
   }
   return state;
@@ -264,8 +261,8 @@ function handleOnOffStateChange(state, settings, characteristicId, value) {
  * @returns {BaseState} - Extracted state
  */
 function extractOnOffState(_accessory, service, _settings) {
-  const onChar = SprutHubClient.findOnCharacteristic(service);
-  const onValue = SprutHubClient.extractValue(onChar?.control?.value);
+  const onChar = SprutHub.findOnCharacteristic(service);
+  const onValue = SprutHub.extractValue(onChar?.control?.value);
   return { on: Boolean(onValue) };
 }
 
@@ -297,7 +294,7 @@ class BaseAction {
     /** @type {boolean} */
     this.stateListenerSetup = false;
 
-    /** @type {SprutHubClient|null} */
+    /** @type {SprutHub|null} */
     this.listenerClient = null;
 
     // Bind methods to preserve 'this' context
@@ -339,7 +336,7 @@ class BaseAction {
       const { accessoryId, characteristicId, value } =
         /** @type {import('./spruthub').StateChange} */ (change);
 
-      const actualValue = SprutHubClient.extractValue(value);
+      const actualValue = SprutHub.extractValue(value);
 
       Object.entries(contexts).forEach(([context, data]) => {
         if (data.action !== this.actionType) return;
@@ -497,7 +494,7 @@ class BaseAction {
         return { ...this.initialState, error: `No ${this.deviceTypeName.toLowerCase()} service` };
       }
 
-      const isOffline = SprutHubClient.isAccessoryOffline(accessory);
+      const isOffline = SprutHub.isAccessoryOffline(accessory);
 
       const state = this.extractState(accessory, service, settings);
       return { ...state, offline: isOffline };
@@ -966,7 +963,7 @@ class BaseAction {
 
 module.exports = {
   BaseAction,
-  SprutHubClient,
+  SprutHub,
   mapBaseSettings,
   handleToggleKeyUp,
   handleOnOffStateChange,

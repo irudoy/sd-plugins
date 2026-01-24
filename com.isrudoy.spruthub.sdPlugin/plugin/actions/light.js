@@ -5,12 +5,7 @@
  */
 
 const { LIGHT_ACTION, COLORS } = require('../lib/common');
-const {
-  BaseAction,
-  SprutHubClient,
-  mapBaseSettings,
-  handleToggleKeyUp,
-} = require('../lib/base-action');
+const { BaseAction, SprutHub, mapBaseSettings, handleToggleKeyUp } = require('../lib/base-action');
 const {
   createButtonCanvas,
   drawStatusBar,
@@ -147,14 +142,14 @@ const lightAction = new BaseAction({
   drawIcon: drawLightbulb,
   initialState: { on: false },
 
-  findService: (accessory) => SprutHubClient.findLightbulbService(accessory),
+  findService: (accessory) => SprutHub.findLightbulbService(accessory),
 
   extractState: (accessory, service, _settings) => {
-    const onChar = SprutHubClient.findOnCharacteristic(service);
-    const brightnessChar = SprutHubClient.findBrightnessCharacteristic(service);
+    const onChar = SprutHub.findOnCharacteristic(service);
+    const brightnessChar = SprutHub.findBrightnessCharacteristic(service);
 
-    const onValue = SprutHubClient.extractValue(onChar?.control?.value);
-    const brightnessValue = SprutHubClient.extractValue(brightnessChar?.control?.value);
+    const onValue = SprutHub.extractValue(onChar?.control?.value);
+    const brightnessValue = SprutHub.extractValue(brightnessChar?.control?.value);
 
     return {
       on: Boolean(onValue),
@@ -167,12 +162,9 @@ const lightAction = new BaseAction({
   handleStateChange: (state, settings, characteristicId, value) => {
     const newState = { ...state };
 
-    if (
-      settings.characteristicId === characteristicId ||
-      characteristicId === SprutHubClient.CHAR_ON
-    ) {
+    if (settings.characteristicId === characteristicId || characteristicId === SprutHub.CHAR_ON) {
       newState.on = Boolean(value);
-    } else if (characteristicId === SprutHubClient.CHAR_BRIGHTNESS) {
+    } else if (characteristicId === SprutHub.CHAR_BRIGHTNESS) {
       newState.brightness = Number(value);
     }
 
@@ -206,7 +198,7 @@ const lightAction = new BaseAction({
   /**
    * Handle dial rotation for brightness control (sends to hub)
    * State is already updated by previewDialRotate, just send to hub
-   * @param {import('../lib/spruthub').SprutHubClient} client
+   * @param {import('../lib/spruthub').SprutHub} client
    * @param {LightSettings} settings
    * @param {LightState} currentState
    * @param {{ticks: number}} _payload
@@ -224,7 +216,7 @@ const lightAction = new BaseAction({
     const service = accessory.services?.find((s) => s.sId === serviceId);
     if (!service) return null;
 
-    const brightnessChar = SprutHubClient.findBrightnessCharacteristic(service);
+    const brightnessChar = SprutHub.findBrightnessCharacteristic(service);
     if (!brightnessChar) return null;
 
     // State already updated by preview, just send current value to hub
@@ -234,7 +226,7 @@ const lightAction = new BaseAction({
 
     // If turning off via dial (brightness = 0), also turn off
     if (brightness === 0 && currentState.on) {
-      const onChar = SprutHubClient.findOnCharacteristic(service);
+      const onChar = SprutHub.findOnCharacteristic(service);
       if (onChar) {
         await client.updateCharacteristic(accessoryId, serviceId, onChar.cId, false);
       }
@@ -243,7 +235,7 @@ const lightAction = new BaseAction({
 
     // If turning on via dial (brightness > 0 and was off)
     if (brightness > 0 && !currentState.on) {
-      const onChar = SprutHubClient.findOnCharacteristic(service);
+      const onChar = SprutHub.findOnCharacteristic(service);
       if (onChar) {
         await client.updateCharacteristic(accessoryId, serviceId, onChar.cId, true);
       }

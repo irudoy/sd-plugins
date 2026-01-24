@@ -5,7 +5,7 @@
  */
 
 const { COVER_ACTION, COLORS } = require('../lib/common');
-const { BaseAction, SprutHubClient, mapBaseSettings } = require('../lib/base-action');
+const { BaseAction, SprutHub, mapBaseSettings } = require('../lib/base-action');
 const {
   createButtonCanvas,
   drawStatusBar,
@@ -153,13 +153,13 @@ const coverAction = new BaseAction({
   drawIcon: (ctx, x, y, size, color) => drawCoverIcon(ctx, x, y, size, color, 50),
   initialState: { position: 0 },
 
-  findService: (accessory) => SprutHubClient.findCoverService(accessory),
+  findService: (accessory) => SprutHub.findCoverService(accessory),
 
   extractState: (_accessory, service, _settings) => {
-    const currentPositionChar = SprutHubClient.findCurrentPositionCharacteristic(service);
-    const targetPositionChar = SprutHubClient.findTargetPositionCharacteristic(service);
-    const currentValue = SprutHubClient.extractValue(currentPositionChar?.control?.value);
-    const targetValue = SprutHubClient.extractValue(targetPositionChar?.control?.value);
+    const currentPositionChar = SprutHub.findCurrentPositionCharacteristic(service);
+    const targetPositionChar = SprutHub.findTargetPositionCharacteristic(service);
+    const currentValue = SprutHub.extractValue(currentPositionChar?.control?.value);
+    const targetValue = SprutHub.extractValue(targetPositionChar?.control?.value);
 
     return {
       position: Number(currentValue) || 0,
@@ -213,10 +213,10 @@ const coverAction = new BaseAction({
 
   /**
    * Handle dial rotation for position control (sends to hub)
-   * @param {import('../lib/spruthub').SprutHubClient} client
+   * @param {import('../lib/spruthub').SprutHub} client
    * @param {CoverSettings} settings
    * @param {CoverState} currentState
-   * @param {{ticks: number}} payload
+   * @param {{ticks: number}} _payload
    * @returns {Promise<CoverState|null>}
    */
   handleDialRotate: async (client, settings, currentState, _payload) => {

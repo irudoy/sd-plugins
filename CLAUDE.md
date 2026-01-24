@@ -145,12 +145,12 @@ Smart home control via Sprut.Hub controller (HomeKit-compatible).
 
 | Action | UUID | Description |
 |--------|------|-------------|
-| Light | `com.isrudoy.spruthub.light` | Lightbulb control with brightness |
+| Light | `com.isrudoy.spruthub.light` | Lightbulb control with brightness, dial rotation |
 | Switch | `com.isrudoy.spruthub.switch` | Simple on/off switch |
 | Outlet | `com.isrudoy.spruthub.outlet` | Power outlet on/off |
 | Lock | `com.isrudoy.spruthub.lock` | Door lock control |
-| Cover | `com.isrudoy.spruthub.cover` | Window covering (blinds/shades) 0-100% |
-| Thermostat | `com.isrudoy.spruthub.thermostat` | Climate control with temperature |
+| Cover | `com.isrudoy.spruthub.cover` | Window covering (blinds/shades) 0-100%, dial rotation |
+| Thermostat | `com.isrudoy.spruthub.thermostat` | Climate control with temperature, dial rotation |
 | Sensor | `com.isrudoy.spruthub.sensor` | Read-only sensors (temp, humidity, motion, contact) |
 | Button | `com.isrudoy.spruthub.button` | Trigger button events (single/double/long press) |
 
@@ -160,20 +160,72 @@ Smart home control via Sprut.Hub controller (HomeKit-compatible).
 plugin/
 ├── index.js              # Entry point, WebSocket, event routing
 ├── lib/
-│   ├── common.js         # Constants, colors, canvas layout, logging
-│   ├── state.js          # Shared state (contexts, timers)
+│   ├── common.js         # Constants, colors, logging
+│   ├── state.js          # Shared state (contexts, timers, dial debounce)
 │   ├── websocket.js      # setImage, setTitle, sendToPropertyInspector
-│   └── spruthub.js       # SprutHubClient: WebSocket API, service/char helpers
+│   ├── spruthub.js       # SprutHubClient: WebSocket API, service/char helpers
+│   ├── base-action.js    # BaseAction class, shared handlers (see below)
+│   └── draw-common.js    # Canvas helpers, layout constants
 └── actions/
-    ├── light.js          # Lightbulb (on/off, brightness)
+    ├── light.js          # Lightbulb (on/off, brightness, dial)
     ├── switch.js         # Switch (on/off)
     ├── outlet.js         # Outlet (on/off)
     ├── lock.js           # Lock (locked/unlocked)
-    ├── cover.js          # Cover (position 0-100%)
-    ├── thermostat.js     # Thermostat (temp, mode)
+    ├── cover.js          # Cover (position 0-100%, dial)
+    ├── thermostat.js     # Thermostat (temp, mode, dial)
     ├── sensor.js         # Sensors (temp, humidity, motion, contact)
     └── button.js         # Button (single/double/long press)
+
+pi-lib/                   # Shared Property Inspector code
+├── common.js             # SprutHubPI class, connection settings, device selection
+└── styles.css            # Common PI styles (status messages, connection panel)
+
+{device}/index.html       # PI for each device type (light, switch, etc.)
 ```
+
+### BaseAction Pattern (base-action.js)
+
+All actions extend `BaseAction` class which provides:
+- Event handlers: `onWillAppear`, `onWillDisappear`, `onKeyUp`, `onDialRotate`, etc.
+- State management: `fetchState`, `updateButton`, `syncAccessoryState`
+- PI communication: `handleTestConnection`, `handleGetDevices`
+
+**Shared utility functions:**
+```javascript
+const {
+  BaseAction,
+  SprutHubClient,
+  mapBaseSettings,        // Maps common settings from PI payload
+  handleToggleKeyUp,      // Standard on/off/toggle handler
+  handleOnOffStateChange, // Standard state change for on/off devices
+  extractOnOffState,      // Extract on/off state from service
+} = require('../lib/base-action');
+```
+
+**Action configuration example (switch.js):**
+```javascript
+const switchAction = new BaseAction({
+  actionType: SWITCH_ACTION,
+  deviceTypeName: 'Switch',
+  drawIcon: (ctx, x, y, size, color) => drawSwitchIcon(ctx, x, y, size, color, false),
+  initialState: { on: false },
+  findService: (accessory) => SprutHubClient.findSwitchService(accessory),
+  extractState: extractOnOffState,
+  renderState,
+  handleStateChange: handleOnOffStateChange,
+  handleKeyUp: handleToggleKeyUp,
+});
+
+module.exports = switchAction.getExports();
+```
+
+### Dial Rotation (Knob Support)
+
+Actions can support StreamDock+ dial/knob with two callbacks:
+- `previewDialRotate` — immediate UI update (no API call)
+- `handleDialRotate` — debounced API call (150ms)
+
+State is synced across all buttons for the same accessory via `syncAccessoryState()`.
 
 ### Sprut.Hub API
 
@@ -221,12 +273,30 @@ All actions support these visual states:
 
 Uses `node-canvas` for dynamic button images (144x144 PNG).
 
-**Layout constants (common.js):**
+**draw-common.js** — shared drawing utilities:
+```javascript
+const {
+  createButtonCanvas,    // Returns { canvas, ctx } for 144x144 canvas
+  drawStatusBar,         // Bottom status bar
+  drawDeviceName,        // Device name text
+  drawStatusText,        // Status text (On/Off, percentage, etc.)
+  drawError,             // Error state
+  drawConnectingWithIcon,
+  drawNotConfiguredWithIcon,
+  drawOfflineWithIcon,
+  CANVAS_SIZE,           // 144
+  CANVAS_CENTER,         // 72
+  LAYOUT,                // Layout constants (see below)
+} = require('../lib/draw-common');
+```
+
+**Layout constants (draw-common.js):**
 ```javascript
 const LAYOUT = {
   bulbY: 50,           // Icon vertical position
   bulbSize: 70,        // Icon size
   nameY: 104,          // Device name Y position
+  nameYOff: 115,       // Device name Y when off (no status text)
   brightnessY: 125,    // Status text Y position
   statusBarY: 138,     // Status bar Y position
   statusBarHeight: 6,  // Status bar height
@@ -283,6 +353,33 @@ const $propEvent = {
     }
   }
 };
+```
+
+### Spruthub PI Architecture (pi-lib/)
+
+Shared code for all 8 Property Inspectors:
+
+**pi-lib/common.js** — `SprutHubPI` class:
+- `initDom()` — injects Connection Settings HTML into `#connectionSettingsContainer`
+- `renderConnectionSettings()` — generates connection panel HTML
+- `testConnection()`, `populateDeviceDropdown()`, `updateServiceDropdown()`
+- Device/service selection logic
+
+**pi-lib/styles.css** — common styles:
+- `.status-message`, `.status-success`, `.status-error`, `.status-info`
+- `.connection-btn`, `.connection-status`
+- `#connectionSettings` panel styling
+
+**PI HTML structure:**
+```html
+<link rel="stylesheet" href="../pi-lib/styles.css">
+<script src="../pi-lib/common.js"></script>
+...
+<div id="connectionSettingsContainer"></div>  <!-- Injected by initDom() -->
+<div class="sdpi-item">
+  <div class="sdpi-item-label">Device</div>
+  <select id="deviceSelect">...</select>
+</div>
 ```
 
 ## Device Detection
@@ -351,6 +448,7 @@ if (dataPartition) {
 2. **PI Not Receiving Data** — Check `currentPIContext` is set
 3. **setImage not working** — Use PNG, not SVG
 4. **Razer not detected** — Requires Input Monitoring permission
+5. **DEBUG left enabled** — Set `DEBUG = true` in `plugin/lib/common.js` for debugging (logs to `plugin/plugin.log`), but ensure it's `false` before finishing work
 
 ## Reference
 

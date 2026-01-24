@@ -101,10 +101,10 @@ const { log, REQUEST_TIMEOUT, MAX_RECONNECT_ATTEMPTS } = require('./common');
  */
 
 // ============================================================
-// SprutHubClient Class
+// SprutHub Class
 // ============================================================
 
-class SprutHubClient {
+class SprutHub {
   // ============================================================
   // Static Constants - Service Types
   // ============================================================
@@ -186,8 +186,8 @@ class SprutHubClient {
    */
   static isLightbulbService(service) {
     return (
-      service.type === SprutHubClient.SERVICE_LIGHTBULB ||
-      service.type === SprutHubClient.SERVICE_LIGHTBULB_NAME
+      service.type === SprutHub.SERVICE_LIGHTBULB ||
+      service.type === SprutHub.SERVICE_LIGHTBULB_NAME
     );
   }
 
@@ -197,7 +197,7 @@ class SprutHubClient {
    * @returns {SprutHubService|undefined}
    */
   static findLightbulbService(accessory) {
-    return accessory.services?.find(SprutHubClient.isLightbulbService);
+    return accessory.services?.find(SprutHub.isLightbulbService);
   }
 
   /**
@@ -215,8 +215,8 @@ class SprutHubClient {
    * @returns {boolean}
    */
   static isOnCharacteristic(char) {
-    const type = SprutHubClient.getCharacteristicType(char);
-    return type === SprutHubClient.CHAR_ON || SprutHubClient.CHAR_ON_NAMES.includes(String(type));
+    const type = SprutHub.getCharacteristicType(char);
+    return type === SprutHub.CHAR_ON || SprutHub.CHAR_ON_NAMES.includes(String(type));
   }
 
   /**
@@ -225,10 +225,9 @@ class SprutHubClient {
    * @returns {boolean}
    */
   static isBrightnessCharacteristic(char) {
-    const type = SprutHubClient.getCharacteristicType(char);
+    const type = SprutHub.getCharacteristicType(char);
     return (
-      type === SprutHubClient.CHAR_BRIGHTNESS ||
-      SprutHubClient.CHAR_BRIGHTNESS_NAMES.includes(String(type))
+      type === SprutHub.CHAR_BRIGHTNESS || SprutHub.CHAR_BRIGHTNESS_NAMES.includes(String(type))
     );
   }
 
@@ -252,10 +251,10 @@ class SprutHubClient {
    */
   static findOnCharacteristic(service) {
     // First try by type
-    let char = service.characteristics?.find(SprutHubClient.isOnCharacteristic);
+    let char = service.characteristics?.find(SprutHub.isOnCharacteristic);
     // Fallback: find by boolean value
     if (!char) {
-      char = service.characteristics?.find(SprutHubClient.hasBooleanValue);
+      char = service.characteristics?.find(SprutHub.hasBooleanValue);
     }
     return char;
   }
@@ -266,7 +265,7 @@ class SprutHubClient {
    * @returns {SprutHubCharacteristic|undefined}
    */
   static findBrightnessCharacteristic(service) {
-    return service.characteristics?.find(SprutHubClient.isBrightnessCharacteristic);
+    return service.characteristics?.find(SprutHub.isBrightnessCharacteristic);
   }
 
   // ============================================================
@@ -289,7 +288,7 @@ class SprutHubClient {
    * @returns {boolean}
    */
   static isSwitchService(service) {
-    return SprutHubClient.matchesType(service.type, SprutHubClient.SERVICE_TYPES.SWITCH);
+    return SprutHub.matchesType(service.type, SprutHub.SERVICE_TYPES.SWITCH);
   }
 
   /**
@@ -298,7 +297,7 @@ class SprutHubClient {
    * @returns {boolean}
    */
   static isOutletService(service) {
-    return SprutHubClient.matchesType(service.type, SprutHubClient.SERVICE_TYPES.OUTLET);
+    return SprutHub.matchesType(service.type, SprutHub.SERVICE_TYPES.OUTLET);
   }
 
   /**
@@ -307,7 +306,7 @@ class SprutHubClient {
    * @returns {boolean}
    */
   static isThermostatService(service) {
-    return SprutHubClient.matchesType(service.type, SprutHubClient.SERVICE_TYPES.THERMOSTAT);
+    return SprutHub.matchesType(service.type, SprutHub.SERVICE_TYPES.THERMOSTAT);
   }
 
   /**
@@ -316,7 +315,7 @@ class SprutHubClient {
    * @returns {boolean}
    */
   static isCoverService(service) {
-    return SprutHubClient.matchesType(service.type, SprutHubClient.SERVICE_TYPES.COVER);
+    return SprutHub.matchesType(service.type, SprutHub.SERVICE_TYPES.COVER);
   }
 
   /**
@@ -325,7 +324,7 @@ class SprutHubClient {
    * @returns {boolean}
    */
   static isLockService(service) {
-    return SprutHubClient.matchesType(service.type, SprutHubClient.SERVICE_TYPES.LOCK);
+    return SprutHub.matchesType(service.type, SprutHub.SERVICE_TYPES.LOCK);
   }
 
   /**
@@ -334,7 +333,7 @@ class SprutHubClient {
    * @returns {boolean}
    */
   static isTempSensorService(service) {
-    return SprutHubClient.matchesType(service.type, SprutHubClient.SERVICE_TYPES.TEMP_SENSOR);
+    return SprutHub.matchesType(service.type, SprutHub.SERVICE_TYPES.TEMP_SENSOR);
   }
 
   /**
@@ -343,7 +342,7 @@ class SprutHubClient {
    * @returns {boolean}
    */
   static isHumiditySensorService(service) {
-    return SprutHubClient.matchesType(service.type, SprutHubClient.SERVICE_TYPES.HUMIDITY_SENSOR);
+    return SprutHub.matchesType(service.type, SprutHub.SERVICE_TYPES.HUMIDITY_SENSOR);
   }
 
   /**
@@ -352,7 +351,7 @@ class SprutHubClient {
    * @returns {boolean}
    */
   static isContactSensorService(service) {
-    return SprutHubClient.matchesType(service.type, SprutHubClient.SERVICE_TYPES.CONTACT_SENSOR);
+    return SprutHub.matchesType(service.type, SprutHub.SERVICE_TYPES.CONTACT_SENSOR);
   }
 
   /**
@@ -361,7 +360,7 @@ class SprutHubClient {
    * @returns {boolean}
    */
   static isMotionSensorService(service) {
-    return SprutHubClient.matchesType(service.type, SprutHubClient.SERVICE_TYPES.MOTION_SENSOR);
+    return SprutHub.matchesType(service.type, SprutHub.SERVICE_TYPES.MOTION_SENSOR);
   }
 
   /**
@@ -370,7 +369,7 @@ class SprutHubClient {
    * @returns {boolean}
    */
   static isButtonService(service) {
-    return SprutHubClient.matchesType(service.type, SprutHubClient.SERVICE_TYPES.BUTTON);
+    return SprutHub.matchesType(service.type, SprutHub.SERVICE_TYPES.BUTTON);
   }
 
   /**
@@ -380,10 +379,10 @@ class SprutHubClient {
    */
   static isSensorService(service) {
     return (
-      SprutHubClient.isTempSensorService(service) ||
-      SprutHubClient.isHumiditySensorService(service) ||
-      SprutHubClient.isContactSensorService(service) ||
-      SprutHubClient.isMotionSensorService(service)
+      SprutHub.isTempSensorService(service) ||
+      SprutHub.isHumiditySensorService(service) ||
+      SprutHub.isContactSensorService(service) ||
+      SprutHub.isMotionSensorService(service)
     );
   }
 
@@ -393,10 +392,10 @@ class SprutHubClient {
    * @returns {'temperature'|'humidity'|'contact'|'motion'|null}
    */
   static getSensorType(service) {
-    if (SprutHubClient.isTempSensorService(service)) return 'temperature';
-    if (SprutHubClient.isHumiditySensorService(service)) return 'humidity';
-    if (SprutHubClient.isContactSensorService(service)) return 'contact';
-    if (SprutHubClient.isMotionSensorService(service)) return 'motion';
+    if (SprutHub.isTempSensorService(service)) return 'temperature';
+    if (SprutHub.isHumiditySensorService(service)) return 'humidity';
+    if (SprutHub.isContactSensorService(service)) return 'contact';
+    if (SprutHub.isMotionSensorService(service)) return 'motion';
     return null;
   }
 
@@ -410,7 +409,7 @@ class SprutHubClient {
    * @returns {SprutHubService|undefined}
    */
   static findSwitchService(accessory) {
-    return accessory.services?.find(SprutHubClient.isSwitchService);
+    return accessory.services?.find(SprutHub.isSwitchService);
   }
 
   /**
@@ -419,7 +418,7 @@ class SprutHubClient {
    * @returns {SprutHubService|undefined}
    */
   static findOutletService(accessory) {
-    return accessory.services?.find(SprutHubClient.isOutletService);
+    return accessory.services?.find(SprutHub.isOutletService);
   }
 
   /**
@@ -428,7 +427,7 @@ class SprutHubClient {
    * @returns {SprutHubService|undefined}
    */
   static findThermostatService(accessory) {
-    return accessory.services?.find(SprutHubClient.isThermostatService);
+    return accessory.services?.find(SprutHub.isThermostatService);
   }
 
   /**
@@ -437,7 +436,7 @@ class SprutHubClient {
    * @returns {SprutHubService|undefined}
    */
   static findCoverService(accessory) {
-    return accessory.services?.find(SprutHubClient.isCoverService);
+    return accessory.services?.find(SprutHub.isCoverService);
   }
 
   /**
@@ -446,7 +445,7 @@ class SprutHubClient {
    * @returns {SprutHubService|undefined}
    */
   static findLockService(accessory) {
-    return accessory.services?.find(SprutHubClient.isLockService);
+    return accessory.services?.find(SprutHub.isLockService);
   }
 
   /**
@@ -455,7 +454,7 @@ class SprutHubClient {
    * @returns {SprutHubService|undefined}
    */
   static findSensorService(accessory) {
-    return accessory.services?.find(SprutHubClient.isSensorService);
+    return accessory.services?.find(SprutHub.isSensorService);
   }
 
   /**
@@ -464,7 +463,7 @@ class SprutHubClient {
    * @returns {SprutHubService|undefined}
    */
   static findButtonService(accessory) {
-    return accessory.services?.find(SprutHubClient.isButtonService);
+    return accessory.services?.find(SprutHub.isButtonService);
   }
 
   // ============================================================
@@ -481,7 +480,7 @@ class SprutHubClient {
     // Type can be at c.type (old format) or c.control.type (Sprut.Hub format)
     return service.characteristics?.find((c) => {
       const charType = c.type ?? c.control?.type;
-      return charType !== undefined && SprutHubClient.matchesType(charType, types);
+      return charType !== undefined && SprutHub.matchesType(charType, types);
     });
   }
 
@@ -491,7 +490,7 @@ class SprutHubClient {
    * @returns {SprutHubCharacteristic|undefined}
    */
   static findCurrentTempCharacteristic(service) {
-    return SprutHubClient.findCharacteristicByType(service, SprutHubClient.CHAR_TYPES.CURRENT_TEMP);
+    return SprutHub.findCharacteristicByType(service, SprutHub.CHAR_TYPES.CURRENT_TEMP);
   }
 
   /**
@@ -500,7 +499,7 @@ class SprutHubClient {
    * @returns {SprutHubCharacteristic|undefined}
    */
   static findTargetTempCharacteristic(service) {
-    return SprutHubClient.findCharacteristicByType(service, SprutHubClient.CHAR_TYPES.TARGET_TEMP);
+    return SprutHub.findCharacteristicByType(service, SprutHub.CHAR_TYPES.TARGET_TEMP);
   }
 
   /**
@@ -509,10 +508,7 @@ class SprutHubClient {
    * @returns {SprutHubCharacteristic|undefined}
    */
   static findCurrentHumidityCharacteristic(service) {
-    return SprutHubClient.findCharacteristicByType(
-      service,
-      SprutHubClient.CHAR_TYPES.CURRENT_HUMIDITY
-    );
+    return SprutHub.findCharacteristicByType(service, SprutHub.CHAR_TYPES.CURRENT_HUMIDITY);
   }
 
   /**
@@ -521,10 +517,7 @@ class SprutHubClient {
    * @returns {SprutHubCharacteristic|undefined}
    */
   static findCurrentPositionCharacteristic(service) {
-    return SprutHubClient.findCharacteristicByType(
-      service,
-      SprutHubClient.CHAR_TYPES.CURRENT_POSITION
-    );
+    return SprutHub.findCharacteristicByType(service, SprutHub.CHAR_TYPES.CURRENT_POSITION);
   }
 
   /**
@@ -533,10 +526,7 @@ class SprutHubClient {
    * @returns {SprutHubCharacteristic|undefined}
    */
   static findTargetPositionCharacteristic(service) {
-    return SprutHubClient.findCharacteristicByType(
-      service,
-      SprutHubClient.CHAR_TYPES.TARGET_POSITION
-    );
+    return SprutHub.findCharacteristicByType(service, SprutHub.CHAR_TYPES.TARGET_POSITION);
   }
 
   /**
@@ -545,7 +535,7 @@ class SprutHubClient {
    * @returns {SprutHubCharacteristic|undefined}
    */
   static findLockCurrentStateCharacteristic(service) {
-    return SprutHubClient.findCharacteristicByType(service, SprutHubClient.CHAR_TYPES.LOCK_CURRENT);
+    return SprutHub.findCharacteristicByType(service, SprutHub.CHAR_TYPES.LOCK_CURRENT);
   }
 
   /**
@@ -554,7 +544,7 @@ class SprutHubClient {
    * @returns {SprutHubCharacteristic|undefined}
    */
   static findLockTargetStateCharacteristic(service) {
-    return SprutHubClient.findCharacteristicByType(service, SprutHubClient.CHAR_TYPES.LOCK_TARGET);
+    return SprutHub.findCharacteristicByType(service, SprutHub.CHAR_TYPES.LOCK_TARGET);
   }
 
   /**
@@ -563,10 +553,7 @@ class SprutHubClient {
    * @returns {SprutHubCharacteristic|undefined}
    */
   static findHeatingCoolingCurrentCharacteristic(service) {
-    return SprutHubClient.findCharacteristicByType(
-      service,
-      SprutHubClient.CHAR_TYPES.HEATING_COOLING_CURRENT
-    );
+    return SprutHub.findCharacteristicByType(service, SprutHub.CHAR_TYPES.HEATING_COOLING_CURRENT);
   }
 
   /**
@@ -575,10 +562,7 @@ class SprutHubClient {
    * @returns {SprutHubCharacteristic|undefined}
    */
   static findHeatingCoolingTargetCharacteristic(service) {
-    return SprutHubClient.findCharacteristicByType(
-      service,
-      SprutHubClient.CHAR_TYPES.HEATING_COOLING_TARGET
-    );
+    return SprutHub.findCharacteristicByType(service, SprutHub.CHAR_TYPES.HEATING_COOLING_TARGET);
   }
 
   /**
@@ -587,10 +571,7 @@ class SprutHubClient {
    * @returns {SprutHubCharacteristic|undefined}
    */
   static findContactStateCharacteristic(service) {
-    return SprutHubClient.findCharacteristicByType(
-      service,
-      SprutHubClient.CHAR_TYPES.CONTACT_STATE
-    );
+    return SprutHub.findCharacteristicByType(service, SprutHub.CHAR_TYPES.CONTACT_STATE);
   }
 
   /**
@@ -599,10 +580,7 @@ class SprutHubClient {
    * @returns {SprutHubCharacteristic|undefined}
    */
   static findMotionDetectedCharacteristic(service) {
-    return SprutHubClient.findCharacteristicByType(
-      service,
-      SprutHubClient.CHAR_TYPES.MOTION_DETECTED
-    );
+    return SprutHub.findCharacteristicByType(service, SprutHub.CHAR_TYPES.MOTION_DETECTED);
   }
 
   /**
@@ -611,7 +589,7 @@ class SprutHubClient {
    * @returns {SprutHubCharacteristic|undefined}
    */
   static findStatusFaultCharacteristic(service) {
-    return SprutHubClient.findCharacteristicByType(service, SprutHubClient.CHAR_TYPES.STATUS_FAULT);
+    return SprutHub.findCharacteristicByType(service, SprutHub.CHAR_TYPES.STATUS_FAULT);
   }
 
   /**
@@ -620,9 +598,9 @@ class SprutHubClient {
    * @returns {SprutHubCharacteristic|undefined}
    */
   static findProgrammableSwitchEventCharacteristic(service) {
-    return SprutHubClient.findCharacteristicByType(
+    return SprutHub.findCharacteristicByType(
       service,
-      SprutHubClient.CHAR_TYPES.PROGRAMMABLE_SWITCH_EVENT
+      SprutHub.CHAR_TYPES.PROGRAMMABLE_SWITCH_EVENT
     );
   }
 
@@ -632,9 +610,9 @@ class SprutHubClient {
    * @returns {boolean}
    */
   static isServiceFaulted(service) {
-    const faultChar = SprutHubClient.findStatusFaultCharacteristic(service);
+    const faultChar = SprutHub.findStatusFaultCharacteristic(service);
     if (!faultChar) return false;
-    const value = SprutHubClient.extractValue(faultChar.control?.value);
+    const value = SprutHub.extractValue(faultChar.control?.value);
     // StatusFault: 0 = No Fault, 1 = General Fault (often means offline)
     return value === 1 || value === true;
   }
@@ -655,7 +633,7 @@ class SprutHubClient {
     // Check all services for StatusFault
     if (accessory.services) {
       for (const service of accessory.services) {
-        if (SprutHubClient.isServiceFaulted(service)) {
+        if (SprutHub.isServiceFaulted(service)) {
           return true;
         }
       }
@@ -669,16 +647,16 @@ class SprutHubClient {
    * @returns {SprutHubLight|null} - Light object or null if not a light
    */
   static accessoryToLight(accessory) {
-    const service = SprutHubClient.findLightbulbService(accessory);
+    const service = SprutHub.findLightbulbService(accessory);
     if (!service) return null;
 
-    const onChar = SprutHubClient.findOnCharacteristic(service);
+    const onChar = SprutHub.findOnCharacteristic(service);
     if (!onChar) return null;
 
-    const brightnessChar = SprutHubClient.findBrightnessCharacteristic(service);
-    const onValue = SprutHubClient.extractValue(onChar.control?.value);
+    const brightnessChar = SprutHub.findBrightnessCharacteristic(service);
+    const onValue = SprutHub.extractValue(onChar.control?.value);
     const brightnessValue = brightnessChar
-      ? SprutHubClient.extractValue(brightnessChar.control?.value)
+      ? SprutHub.extractValue(brightnessChar.control?.value)
       : undefined;
 
     return {
@@ -1073,7 +1051,7 @@ class SprutHubClient {
   async getLights() {
     const accessories = await this.getAccessories();
     return accessories
-      .map(SprutHubClient.accessoryToLight)
+      .map(SprutHub.accessoryToLight)
       .filter(/** @type {(l: SprutHubLight|null) => l is SprutHubLight} */ (l) => l !== null);
   }
 
@@ -1154,7 +1132,7 @@ class SprutHubClient {
 // Singleton Client Management
 // ============================================================
 
-/** @type {SprutHubClient|null} */
+/** @type {SprutHub|null} */
 let client = null;
 
 /** @type {{host: string, token: string, serial: string}|null} */
@@ -1165,7 +1143,7 @@ let currentSettings = null;
  * @param {string} host - Hub hostname
  * @param {string} token - Auth token
  * @param {string} serial - Hub serial
- * @returns {SprutHubClient|null}
+ * @returns {SprutHub|null}
  */
 function getClient(host, token, serial) {
   // Validate required parameters
@@ -1193,7 +1171,7 @@ function getClient(host, token, serial) {
 
   if (!client) {
     currentSettings = { host, token, serial };
-    client = new SprutHubClient(host, token, serial);
+    client = new SprutHub(host, token, serial);
   }
 
   return client;
@@ -1213,7 +1191,7 @@ function disconnectClient() {
 
 /**
  * Get current client instance (may be null)
- * @returns {SprutHubClient|null}
+ * @returns {SprutHub|null}
  */
 function getCurrentClient() {
   return client;
@@ -1225,7 +1203,7 @@ function getCurrentClient() {
 
 module.exports = {
   // Class (includes static methods and constants)
-  SprutHubClient,
+  SprutHub,
   // Singleton management
   getClient,
   disconnectClient,

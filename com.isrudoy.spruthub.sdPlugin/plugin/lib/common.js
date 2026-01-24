@@ -26,7 +26,7 @@ const path = require('path');
 // ============================================================
 
 /** @type {boolean} */
-const DEBUG = true;
+const DEBUG = false;
 
 // Action UUIDs
 /** @type {string} */

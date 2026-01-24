@@ -5,7 +5,7 @@
  */
 
 const { THERMOSTAT_ACTION, COLORS } = require('../lib/common');
-const { BaseAction, SprutHubClient, mapBaseSettings } = require('../lib/base-action');
+const { BaseAction, SprutHub, mapBaseSettings } = require('../lib/base-action');
 const { createButtonCanvas, drawStatusBar, CANVAS_CENTER, LAYOUT } = require('../lib/draw-common');
 
 // ============================================================
@@ -204,19 +204,19 @@ const thermostatAction = new BaseAction({
   drawIcon: (ctx, x, y, size, color) => drawThermometerIcon(ctx, x, y, size, color, 0.5),
   initialState: { currentTemp: 0, targetTemp: 0, currentMode: 0, targetMode: 0 },
 
-  findService: (accessory) => SprutHubClient.findThermostatService(accessory),
+  findService: (accessory) => SprutHub.findThermostatService(accessory),
 
   extractState: (_accessory, service, _settings) => {
-    const currentTempChar = SprutHubClient.findCurrentTempCharacteristic(service);
-    const targetTempChar = SprutHubClient.findTargetTempCharacteristic(service);
-    const currentModeChar = SprutHubClient.findHeatingCoolingCurrentCharacteristic(service);
-    const targetModeChar = SprutHubClient.findHeatingCoolingTargetCharacteristic(service);
+    const currentTempChar = SprutHub.findCurrentTempCharacteristic(service);
+    const targetTempChar = SprutHub.findTargetTempCharacteristic(service);
+    const currentModeChar = SprutHub.findHeatingCoolingCurrentCharacteristic(service);
+    const targetModeChar = SprutHub.findHeatingCoolingTargetCharacteristic(service);
 
     return {
-      currentTemp: Number(SprutHubClient.extractValue(currentTempChar?.control?.value)) || 0,
-      targetTemp: Number(SprutHubClient.extractValue(targetTempChar?.control?.value)) || 0,
-      currentMode: Number(SprutHubClient.extractValue(currentModeChar?.control?.value)) || 0,
-      targetMode: Number(SprutHubClient.extractValue(targetModeChar?.control?.value)) || 0,
+      currentTemp: Number(SprutHub.extractValue(currentTempChar?.control?.value)) || 0,
+      targetTemp: Number(SprutHub.extractValue(targetTempChar?.control?.value)) || 0,
+      currentMode: Number(SprutHub.extractValue(currentModeChar?.control?.value)) || 0,
+      targetMode: Number(SprutHub.extractValue(targetModeChar?.control?.value)) || 0,
     };
   },
 
@@ -286,7 +286,7 @@ const thermostatAction = new BaseAction({
   /**
    * Handle dial rotation for temperature control (sends to hub)
    * State is already updated by previewDialRotate, just send to hub
-   * @param {import('../lib/spruthub').SprutHubClient} client
+   * @param {import('../lib/spruthub').SprutHub} client
    * @param {ThermostatSettings} settings
    * @param {ThermostatState} currentState
    * @param {{ticks: number}} _payload

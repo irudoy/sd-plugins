@@ -7,7 +7,7 @@
 const { OUTLET_ACTION, COLORS } = require('../lib/common');
 const {
   BaseAction,
-  SprutHubClient,
+  SprutHub,
   handleToggleKeyUp,
   handleOnOffStateChange,
   extractOnOffState,
@@ -138,7 +138,7 @@ const outletAction = new BaseAction({
   drawIcon: drawOutletIcon,
   initialState: { on: false },
 
-  findService: (accessory) => SprutHubClient.findOutletService(accessory),
+  findService: (accessory) => SprutHub.findOutletService(accessory),
 
   extractState: extractOnOffState,
 

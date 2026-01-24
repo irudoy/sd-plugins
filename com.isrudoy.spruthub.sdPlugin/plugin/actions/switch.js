@@ -7,7 +7,7 @@
 const { SWITCH_ACTION, COLORS } = require('../lib/common');
 const {
   BaseAction,
-  SprutHubClient,
+  SprutHub,
   handleToggleKeyUp,
   handleOnOffStateChange,
   extractOnOffState,
@@ -123,7 +123,7 @@ const switchAction = new BaseAction({
   drawIcon: (ctx, x, y, size, color) => drawSwitchIcon(ctx, x, y, size, color, false),
   initialState: { on: false },
 
-  findService: (accessory) => SprutHubClient.findSwitchService(accessory),
+  findService: (accessory) => SprutHub.findSwitchService(accessory),
 
   extractState: extractOnOffState,
 

@@ -6,7 +6,7 @@
  */
 
 const { log, BUTTON_ACTION, COLORS } = require('../lib/common');
-const { BaseAction, SprutHubClient, mapBaseSettings } = require('../lib/base-action');
+const { BaseAction, SprutHub, mapBaseSettings } = require('../lib/base-action');
 const { getContext } = require('../lib/state');
 const { getClient } = require('../lib/spruthub');
 const {
@@ -147,7 +147,7 @@ const buttonAction = new BaseAction({
   drawIcon: (ctx, x, y, size, color) => drawButtonIcon(ctx, x, y, size, color, false),
   initialState: { ready: false },
 
-  findService: (accessory) => SprutHubClient.findButtonService(accessory),
+  findService: (accessory) => SprutHub.findButtonService(accessory),
 
   extractState: () => {
     // Buttons don't have readable state, just ready status

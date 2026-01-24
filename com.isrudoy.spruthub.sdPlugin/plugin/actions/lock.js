@@ -5,7 +5,7 @@
  */
 
 const { LOCK_ACTION, COLORS } = require('../lib/common');
-const { BaseAction, SprutHubClient, mapBaseSettings } = require('../lib/base-action');
+const { BaseAction, SprutHub, mapBaseSettings } = require('../lib/base-action');
 const {
   createButtonCanvas,
   drawStatusBar,
@@ -178,11 +178,11 @@ const lockAction = new BaseAction({
   drawIcon: (ctx, x, y, size, color) => drawLockIcon(ctx, x, y, size, color, true),
   initialState: { locked: false },
 
-  findService: (accessory) => SprutHubClient.findLockService(accessory),
+  findService: (accessory) => SprutHub.findLockService(accessory),
 
   extractState: (_accessory, service, _settings) => {
-    const currentStateChar = SprutHubClient.findLockCurrentStateCharacteristic(service);
-    const currentValue = SprutHubClient.extractValue(currentStateChar?.control?.value);
+    const currentStateChar = SprutHub.findLockCurrentStateCharacteristic(service);
+    const currentValue = SprutHub.extractValue(currentStateChar?.control?.value);
     return { locked: Number(currentValue) === LOCK_SECURED };
   },
 
