@@ -59,6 +59,15 @@ const contexts = {};
 /** @type {Record<string, ReturnType<typeof setInterval>>} */
 const timers = {};
 
+/** @type {Record<string, ReturnType<typeof setTimeout>>} */
+const dialDebounceTimers = {};
+
+/** @type {Record<string, number>} */
+const pendingDialTicks = {};
+
+/** @type {Record<string, number>} */
+const lastUpdateTimestamps = {};
+
 /** @type {string|null} */
 let currentPIAction = null;
 
@@ -140,6 +149,93 @@ function clearCurrentPI(context) {
   }
 }
 
+/**
+ * Add dial ticks to pending and schedule debounced callback
+ * @param {string} context - Context ID
+ * @param {number} ticks - Number of ticks to add
+ * @param {(totalTicks: number) => void} callback - Callback with accumulated ticks
+ * @param {number} [delay=150] - Debounce delay in ms
+ * @returns {void}
+ */
+function addDialTicks(context, ticks, callback, delay = 150) {
+  // Accumulate ticks
+  pendingDialTicks[context] = (pendingDialTicks[context] || 0) + ticks;
+
+  // Clear existing timer
+  if (dialDebounceTimers[context]) {
+    clearTimeout(dialDebounceTimers[context]);
+  }
+
+  // Set new debounce timer
+  dialDebounceTimers[context] = setTimeout(() => {
+    const totalTicks = pendingDialTicks[context] || 0;
+    delete pendingDialTicks[context];
+    delete dialDebounceTimers[context];
+
+    if (totalTicks !== 0) {
+      callback(totalTicks);
+    }
+  }, delay);
+}
+
+/**
+ * Clear dial debounce for context
+ * @param {string} context - Context ID
+ * @returns {void}
+ */
+function clearDialDebounce(context) {
+  if (dialDebounceTimers[context]) {
+    clearTimeout(dialDebounceTimers[context]);
+    delete dialDebounceTimers[context];
+  }
+  delete pendingDialTicks[context];
+}
+
+/**
+ * Mark context as recently updated (for optimistic UI)
+ * @param {string} context - Context ID
+ * @returns {void}
+ */
+function markUpdated(context) {
+  lastUpdateTimestamps[context] = Date.now();
+}
+
+/**
+ * Mark all contexts for a specific accessory as recently updated
+ * @param {number} accessoryId - Accessory ID
+ * @returns {void}
+ */
+function markAccessoryUpdated(accessoryId) {
+  const now = Date.now();
+  Object.entries(contexts).forEach(([context, data]) => {
+    const settings = /** @type {{accessoryId?: number}} */ (data.settings || {});
+    if (settings.accessoryId === accessoryId) {
+      lastUpdateTimestamps[context] = now;
+    }
+  });
+}
+
+/**
+ * Check if context was recently updated (within cooldown period)
+ * @param {string} context - Context ID
+ * @param {number} [cooldownMs=500] - Cooldown period in ms
+ * @returns {boolean}
+ */
+function wasRecentlyUpdated(context, cooldownMs = 500) {
+  const lastUpdate = lastUpdateTimestamps[context];
+  if (!lastUpdate) return false;
+  return Date.now() - lastUpdate < cooldownMs;
+}
+
+/**
+ * Clear update timestamp for context
+ * @param {string} context - Context ID
+ * @returns {void}
+ */
+function clearUpdateTimestamp(context) {
+  delete lastUpdateTimestamps[context];
+}
+
 // ============================================================
 // Exports
 // ============================================================
@@ -153,4 +249,10 @@ module.exports = {
   getCurrentPI,
   setCurrentPI,
   clearCurrentPI,
+  addDialTicks,
+  clearDialDebounce,
+  markUpdated,
+  markAccessoryUpdated,
+  wasRecentlyUpdated,
+  clearUpdateTimestamp,
 };

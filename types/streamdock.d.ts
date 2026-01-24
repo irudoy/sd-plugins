@@ -15,6 +15,8 @@ export type StreamDockIncomingEvent =
   | 'willDisappear'
   | 'keyUp'
   | 'keyDown'
+  | 'dialRotate'
+  | 'dialDown'
   | 'sendToPlugin'
   | 'didReceiveSettings'
   | 'didReceiveGlobalSettings'

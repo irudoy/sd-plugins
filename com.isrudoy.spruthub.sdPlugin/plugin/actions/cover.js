@@ -1,133 +1,74 @@
 /**
  * Cover (WindowCovering) Action for Sprut.Hub Plugin
+ * Uses BaseAction for common functionality
  * @module actions/cover
  */
 
-const { createCanvas } = require('canvas');
-const { log, COVER_ACTION, CANVAS_SIZE, CANVAS_CENTER, LAYOUT, COLORS } = require('../lib/common');
-const { contexts, setContext, getContext, deleteContext, stopTimer } = require('../lib/state');
-const { setImage, sendToPropertyInspector } = require('../lib/websocket');
+const { COVER_ACTION, COLORS } = require('../lib/common');
+const { BaseAction, SprutHubClient } = require('../lib/base-action');
 const {
-  SprutHubClient,
-  getClient,
-  disconnectClient,
-  getCurrentClient,
-} = require('../lib/spruthub');
+  createButtonCanvas,
+  drawStatusBar,
+  drawDeviceName,
+  drawStatusText,
+  CANVAS_CENTER,
+  LAYOUT,
+} = require('../lib/draw-common');
 
 // ============================================================
 // Type Definitions
 // ============================================================
 
 /**
- * @typedef {import('../../../types/streamdock').AppearPayload} AppearPayload
- * @typedef {import('../../../types/streamdock').KeyPayload} KeyPayload
- * @typedef {import('../../../types/streamdock').SettingsPayload} SettingsPayload
- * @typedef {import('../../../types/streamdock').SendToPluginPayload} SendToPluginPayload
+ * @typedef {import('canvas').CanvasRenderingContext2D} CanvasContext
  */
 
 /**
  * @typedef {Object} CoverSettings
- * @property {string} [host] - Hub hostname
- * @property {string} [token] - Auth token
- * @property {string} [serial] - Hub serial
- * @property {number} [accessoryId] - Selected cover accessory ID
- * @property {string} [accessoryName] - Accessory display name
- * @property {number} [serviceId] - Actual cover service ID (sId)
- * @property {string} [serviceName] - Service display name
- * @property {number} [targetPositionCharId] - TargetPosition characteristic ID (cId)
- * @property {number} [currentPositionCharId] - CurrentPosition characteristic ID (for reading)
- * @property {string} [customName] - Custom display name
- * @property {string} [action] - toggle | open | close | stop
+ * @property {string} [host]
+ * @property {string} [token]
+ * @property {string} [serial]
+ * @property {number} [accessoryId]
+ * @property {string} [accessoryName]
+ * @property {number} [serviceId]
+ * @property {string} [serviceName]
+ * @property {number} [targetPositionCharId] - TargetPosition characteristic ID
+ * @property {number} [currentPositionCharId] - CurrentPosition characteristic ID
+ * @property {string} [customName]
+ * @property {string} [action] - toggle | open | close
  */
 
 /**
  * @typedef {Object} CoverState
- * @property {number} position - Current position (0-100, 0=closed, 100=open)
- * @property {number} [targetPosition] - Target position (for opening/closing state)
- * @property {string} [error] - Error message
- * @property {boolean} [connecting] - Whether connecting to hub
- * @property {boolean} [offline] - Whether device is offline
+ * @property {number} position - Current position (0-100)
+ * @property {number} [targetPosition]
+ * @property {string} [error]
+ * @property {boolean} [connecting]
+ * @property {boolean} [offline]
  */
 
 // Cover colors
 const COVER_COLORS = {
-  open: '#4CAF50', // Green - open
-  partial: COLORS.warmYellow, // Yellow - partial
-  closed: COLORS.gray, // Gray - closed
+  open: '#4CAF50',
+  partial: COLORS.warmYellow,
+  closed: COLORS.gray,
 };
 
 // ============================================================
-// State Listener
-// ============================================================
-
-/** @type {boolean} */
-let stateListenerSetup = false;
-
-/** @type {import('../lib/spruthub').SprutHubClient|null} */
-let listenerClient = null;
-
-/**
- * Setup state change listener
- * @returns {void}
- */
-function setupStateListener() {
-  const client = getCurrentClient();
-  if (!client) return;
-
-  if (listenerClient !== client) {
-    stateListenerSetup = false;
-    listenerClient = client;
-  }
-
-  if (stateListenerSetup) return;
-
-  client.on('stateChange', (change) => {
-    const { accessoryId, characteristicId, value } =
-      /** @type {import('../lib/spruthub').StateChange} */ (change);
-
-    const actualValue = SprutHubClient.extractValue(value);
-
-    Object.entries(contexts).forEach(([context, data]) => {
-      // Only process cover action contexts
-      if (data.action !== COVER_ACTION) return;
-
-      /** @type {CoverSettings} */
-      const settings = /** @type {CoverSettings} */ (data.settings || {});
-      if (settings.accessoryId === accessoryId) {
-        if (!data.state) {
-          data.state = { position: 0, targetPosition: 0 };
-        }
-
-        // Track current and target positions separately
-        if (settings.currentPositionCharId === characteristicId) {
-          data.state.position = Number(actualValue) || 0;
-        } else if (settings.targetPositionCharId === characteristicId) {
-          data.state.targetPosition = Number(actualValue) || 0;
-        }
-
-        updateButton(context, settings, /** @type {CoverState} */ (data.state));
-      }
-    });
-  });
-
-  stateListenerSetup = true;
-}
-
-// ============================================================
-// Drawing Functions
+// Icon Drawing
 // ============================================================
 
 /**
  * Draw cover/blinds icon
- * @param {import('canvas').CanvasRenderingContext2D} ctx - Canvas context
- * @param {number} x - Center X
- * @param {number} y - Center Y
- * @param {number} size - Icon size
- * @param {string} color - Fill color
- * @param {number} position - Cover position (0-100)
+ * @param {CanvasContext} ctx
+ * @param {number} x
+ * @param {number} y
+ * @param {number} size
+ * @param {string} color
+ * @param {number} [position] - Cover position (0-100)
  * @returns {void}
  */
-function drawCoverIcon(ctx, x, y, size, color, position) {
+function drawCoverIcon(ctx, x, y, size, color, position = 50) {
   const width = size * 0.6;
   const height = size * 0.5;
   const numSlats = 5;
@@ -169,7 +110,6 @@ function getPositionColor(position) {
  * @returns {string}
  */
 function getPositionText(position, targetPosition) {
-  // Check if moving
   if (targetPosition !== undefined && Math.abs(position - targetPosition) > 2) {
     if (targetPosition > position) return 'Closing...';
     return 'Opening...';
@@ -179,244 +119,56 @@ function getPositionText(position, targetPosition) {
   return `${position}%`;
 }
 
+// ============================================================
+// State Rendering
+// ============================================================
+
 /**
- * Draw cover button
- * @param {string} name - Cover name
- * @param {number} position - Position 0-100
- * @param {number} [targetPosition] - Target position (for opening/closing state)
- * @returns {string} Base64 PNG data URL
+ * Render cover state to button image
+ * @param {CoverSettings} settings
+ * @param {CoverState} state
+ * @returns {string}
  */
-function drawCover(name, position, targetPosition) {
-  const canvas = createCanvas(CANVAS_SIZE, CANVAS_SIZE);
-  const ctx = canvas.getContext('2d');
-
-  ctx.fillStyle = COLORS.background;
-  ctx.fillRect(0, 0, CANVAS_SIZE, CANVAS_SIZE);
-
+function renderState(settings, state) {
+  const { canvas, ctx } = createButtonCanvas();
+  const name = getDisplayName(settings);
+  const position = state.position ?? 0;
   const color = getPositionColor(position);
+
   drawCoverIcon(ctx, CANVAS_CENTER, LAYOUT.bulbY, LAYOUT.bulbSize, color, position);
-
-  ctx.fillStyle = position <= 5 ? COLORS.gray : COLORS.white;
-  ctx.font = 'bold 18px sans-serif';
-  ctx.textAlign = 'center';
-  let displayName = name || 'Cover';
-  if (displayName.length > 12) {
-    displayName = displayName.substring(0, 11) + '…';
-  }
-  ctx.fillText(displayName, CANVAS_CENTER, LAYOUT.nameY);
-
-  ctx.fillStyle = color;
-  ctx.font = 'bold 16px sans-serif';
-  ctx.fillText(getPositionText(position, targetPosition), CANVAS_CENTER, LAYOUT.brightnessY);
-
-  ctx.fillStyle = color;
-  ctx.fillRect(0, LAYOUT.statusBarY, CANVAS_SIZE, LAYOUT.statusBarHeight);
+  drawDeviceName(ctx, name, position <= 5 ? COLORS.gray : COLORS.white);
+  drawStatusText(ctx, getPositionText(position, state.targetPosition), color);
+  drawStatusBar(ctx, color);
 
   return canvas.toDataURL('image/png');
 }
 
 /**
- * Draw cover button - Error state
- * @param {string} message - Error message
- * @returns {string} Base64 PNG data URL
- */
-function drawError(message) {
-  const canvas = createCanvas(CANVAS_SIZE, CANVAS_SIZE);
-  const ctx = canvas.getContext('2d');
-
-  ctx.fillStyle = '#3d1a1a';
-  ctx.fillRect(0, 0, CANVAS_SIZE, CANVAS_SIZE);
-
-  ctx.fillStyle = COLORS.red;
-  ctx.font = 'bold 48px sans-serif';
-  ctx.textAlign = 'center';
-  ctx.fillText('!', CANVAS_CENTER, 65);
-
-  ctx.fillStyle = COLORS.white;
-  ctx.font = 'bold 14px sans-serif';
-  let displayMessage = message || 'Error';
-  if (displayMessage.length > 14) {
-    displayMessage = displayMessage.substring(0, 13) + '…';
-  }
-  ctx.fillText(displayMessage, CANVAS_CENTER, 100);
-
-  ctx.fillStyle = COLORS.red;
-  ctx.fillRect(0, LAYOUT.statusBarY, CANVAS_SIZE, LAYOUT.statusBarHeight);
-
-  return canvas.toDataURL('image/png');
-}
-
-/**
- * Draw cover button - Connecting state
- * @returns {string} Base64 PNG data URL
- */
-function drawConnecting() {
-  const canvas = createCanvas(CANVAS_SIZE, CANVAS_SIZE);
-  const ctx = canvas.getContext('2d');
-
-  ctx.fillStyle = COLORS.background;
-  ctx.fillRect(0, 0, CANVAS_SIZE, CANVAS_SIZE);
-
-  drawCoverIcon(ctx, CANVAS_CENTER, LAYOUT.bulbY, LAYOUT.bulbSize, COLORS.yellow, 50);
-
-  ctx.fillStyle = COLORS.yellow;
-  ctx.font = 'bold 16px sans-serif';
-  ctx.textAlign = 'center';
-  ctx.fillText('Connecting...', CANVAS_CENTER, LAYOUT.nameYOff);
-
-  ctx.fillStyle = COLORS.yellow;
-  ctx.fillRect(0, LAYOUT.statusBarY, CANVAS_SIZE, LAYOUT.statusBarHeight);
-
-  return canvas.toDataURL('image/png');
-}
-
-/**
- * Draw cover button - Not configured state
- * @returns {string} Base64 PNG data URL
- */
-function drawNotConfigured() {
-  const canvas = createCanvas(CANVAS_SIZE, CANVAS_SIZE);
-  const ctx = canvas.getContext('2d');
-
-  ctx.fillStyle = '#1a1a2e';
-  ctx.fillRect(0, 0, CANVAS_SIZE, CANVAS_SIZE);
-
-  drawCoverIcon(ctx, CANVAS_CENTER, 50, LAYOUT.bulbSizeSmall, COLORS.gray, 50);
-
-  ctx.fillStyle = COLORS.white;
-  ctx.font = 'bold 20px sans-serif';
-  ctx.textAlign = 'center';
-  ctx.fillText('Setup', CANVAS_CENTER, 110);
-
-  ctx.fillStyle = COLORS.gray;
-  ctx.font = '14px sans-serif';
-  ctx.fillText('Open settings', CANVAS_CENTER, 130);
-
-  return canvas.toDataURL('image/png');
-}
-
-/**
- * Draw cover button - Offline state
- * @param {string} name - Cover name
- * @returns {string} Base64 PNG data URL
- */
-function drawOffline(name) {
-  const canvas = createCanvas(CANVAS_SIZE, CANVAS_SIZE);
-  const ctx = canvas.getContext('2d');
-
-  ctx.fillStyle = COLORS.background;
-  ctx.fillRect(0, 0, CANVAS_SIZE, CANVAS_SIZE);
-
-  drawCoverIcon(ctx, CANVAS_CENTER, LAYOUT.bulbY, LAYOUT.bulbSize, COLORS.unavailable, 50);
-
-  ctx.fillStyle = COLORS.unavailable;
-  ctx.font = 'bold 18px sans-serif';
-  ctx.textAlign = 'center';
-  let displayName = name || 'Cover';
-  if (displayName.length > 12) {
-    displayName = displayName.substring(0, 11) + '…';
-  }
-  ctx.fillText(displayName, CANVAS_CENTER, LAYOUT.nameY);
-
-  ctx.fillStyle = COLORS.unavailable;
-  ctx.font = 'bold 16px sans-serif';
-  ctx.fillText('Offline', CANVAS_CENTER, LAYOUT.brightnessY);
-
-  ctx.fillStyle = COLORS.unavailable;
-  ctx.fillRect(0, LAYOUT.statusBarY, CANVAS_SIZE, LAYOUT.statusBarHeight);
-
-  return canvas.toDataURL('image/png');
-}
-
-// ============================================================
-// Button Update
-// ============================================================
-
-/**
- * Get display name for button
+ * Get display name
  * @param {CoverSettings} settings
  * @returns {string}
  */
 function getDisplayName(settings) {
-  if (settings.customName) {
-    return settings.customName;
-  }
+  if (settings.customName) return settings.customName;
   if (settings.serviceName && settings.serviceName !== settings.accessoryName) {
     return settings.serviceName;
   }
   return settings.accessoryName || 'Cover';
 }
 
-/**
- * Update button image
- * @param {string} context - Action context
- * @param {CoverSettings} settings - Cover settings
- * @param {CoverState} [state] - Current state
- * @returns {void}
- */
-function updateButton(context, settings, state) {
-  let imageData;
-
-  if (state?.error) {
-    imageData = drawError(state.error);
-  } else if (state?.connecting) {
-    imageData = drawConnecting();
-  } else if (!settings.host || !settings.token || !settings.serial || !settings.accessoryId) {
-    imageData = drawNotConfigured();
-  } else if (state?.offline) {
-    imageData = drawOffline(getDisplayName(settings));
-  } else {
-    imageData = drawCover(getDisplayName(settings), state?.position ?? 0, state?.targetPosition);
-  }
-
-  setImage(context, imageData);
-}
-
 // ============================================================
-// Cover State Fetch
+// Action Configuration
 // ============================================================
 
-/**
- * Fetch current cover state from hub
- * @param {CoverSettings} settings - Cover settings
- * @returns {Promise<CoverState>}
- */
-async function fetchCoverState(settings) {
-  const { host, token, serial, accessoryId, serviceId } = settings;
+const coverAction = new BaseAction({
+  actionType: COVER_ACTION,
+  deviceTypeName: 'Cover',
+  drawIcon: (ctx, x, y, size, color) => drawCoverIcon(ctx, x, y, size, color, 50),
+  initialState: { position: 0 },
 
-  if (!host || !token || !serial || !accessoryId) {
-    return { position: 0, error: 'Not configured' };
-  }
+  findService: (accessory) => SprutHubClient.findCoverService(accessory),
 
-  try {
-    const client = getClient(host, token, serial);
-
-    if (!client) {
-      return { position: 0, error: 'Missing connection parameters' };
-    }
-
-    await client.waitForConnection();
-
-    setupStateListener();
-
-    const accessories = await client.getAccessories();
-    const accessory = accessories.find((a) => a.id === accessoryId);
-
-    if (!accessory) {
-      return { position: 0, error: 'Cover not found' };
-    }
-
-    const service = serviceId
-      ? accessory.services?.find((s) => s.sId === serviceId)
-      : SprutHubClient.findCoverService(accessory);
-
-    if (!service) {
-      return { position: 0, error: 'No cover service' };
-    }
-
-    const isOffline = SprutHubClient.isAccessoryOffline(accessory);
-
-    // Get current position (read-only) and target position
+  extractState: (_accessory, service, _settings) => {
     const currentPositionChar = SprutHubClient.findCurrentPositionCharacteristic(service);
     const targetPositionChar = SprutHubClient.findTargetPositionCharacteristic(service);
     const currentValue = SprutHubClient.extractValue(currentPositionChar?.control?.value);
@@ -425,164 +177,75 @@ async function fetchCoverState(settings) {
     return {
       position: Number(currentValue) || 0,
       targetPosition: Number(targetValue) || 0,
-      offline: isOffline,
     };
-  } catch (err) {
-    log('[Cover] Error fetching state:', err);
-    return { position: 0, error: err instanceof Error ? err.message : 'Unknown error' };
-  }
-}
+  },
 
-// ============================================================
-// Action Handlers
-// ============================================================
+  renderState,
 
-/**
- * Handle willAppear event
- * @param {string} context - Action context
- * @param {AppearPayload} payload - Event payload
- * @returns {void}
- */
-function onWillAppear(context, payload) {
-  /** @type {CoverSettings} */
-  const settings = /** @type {CoverSettings} */ (payload?.settings || {});
-  setContext(context, { settings, action: COVER_ACTION, state: { position: 0, connecting: true } });
-
-  updateButton(context, settings, { position: 0, connecting: true });
-
-  fetchCoverState(settings).then((state) => {
-    const ctx = getContext(context);
-    if (ctx) {
-      ctx.state = state;
-      updateButton(context, settings, state);
+  handleStateChange: (state, settings, characteristicId, value) => {
+    const newState = { ...state };
+    if (settings.currentPositionCharId === characteristicId) {
+      newState.position = Number(value) || 0;
+    } else if (settings.targetPositionCharId === characteristicId) {
+      newState.targetPosition = Number(value) || 0;
     }
-  });
-}
+    return newState;
+  },
 
-/**
- * Handle willDisappear event
- * @param {string} context - Action context
- * @returns {void}
- */
-function onWillDisappear(context) {
-  stopTimer(context);
-  deleteContext(context);
+  handleKeyUp: async (client, settings, currentState) => {
+    const { accessoryId, serviceId, targetPositionCharId, action } = settings;
+    if (accessoryId == null || serviceId == null || targetPositionCharId == null) return null;
 
-  if (Object.keys(contexts).length === 0) {
-    disconnectClient();
-    stateListenerSetup = false;
-    listenerClient = null;
-  }
-}
-
-/**
- * Handle keyUp event - Control cover
- * @param {string} context - Action context
- * @param {KeyPayload} payload - Event payload
- * @returns {Promise<void>}
- */
-async function onKeyUp(context, payload) {
-  /** @type {CoverSettings} */
-  const settings = /** @type {CoverSettings} */ (
-    payload?.settings || getContext(context)?.settings || {}
-  );
-  const { host, token, serial, accessoryId, serviceId, targetPositionCharId, action } = settings;
-
-  if (!host || !token || !serial || !accessoryId) {
-    log('[Cover] onKeyUp: missing required settings');
-    return;
-  }
-
-  if (!serviceId || !targetPositionCharId) {
-    log('[Cover] onKeyUp: missing serviceId or targetPositionCharId');
-    return;
-  }
-
-  try {
-    const client = getClient(host, token, serial);
-    if (!client || !client.isConnected()) {
-      log('[Cover] onKeyUp: client not connected');
-      return;
-    }
-
-    const ctx = getContext(context);
-    /** @type {CoverState} */
-    const currentState = /** @type {CoverState} */ (ctx?.state || { position: 0 });
-
-    // Determine new position based on action
     let newPosition;
     if (action === 'open') {
       newPosition = 100;
     } else if (action === 'close') {
       newPosition = 0;
     } else {
-      // toggle - if mostly open, close; if mostly closed, open
-      newPosition = currentState.position > 50 ? 0 : 100;
+      newPosition = (currentState.position ?? 0) > 50 ? 0 : 100;
     }
 
-    log('[Cover] Setting cover position:', {
-      accessoryId,
-      serviceId,
-      targetPositionCharId,
-      newPosition,
-    });
-
-    // Update TargetPosition characteristic
     await client.updateCharacteristic(accessoryId, serviceId, targetPositionCharId, newPosition);
 
-    if (ctx) {
-      ctx.state = { ...currentState, position: newPosition };
-      updateButton(context, settings, /** @type {CoverState} */ (ctx.state));
-    }
-  } catch (err) {
-    log('[Cover] Error controlling:', err);
-  }
-}
+    return { ...currentState, position: newPosition, targetPosition: newPosition };
+  },
 
-/**
- * Handle sendToPlugin event from PI
- * @param {string} context - Action context
- * @param {SendToPluginPayload} payload - PI payload
- * @returns {boolean} - Whether event was handled
- */
-function onSendToPlugin(context, payload) {
-  if (!payload) {
-    return false;
-  }
+  /**
+   * Preview dial rotation (UI only, no API call)
+   * @param {CoverSettings} _settings
+   * @param {CoverState} currentState
+   * @param {{ticks: number}} payload
+   * @returns {CoverState|null}
+   */
+  previewDialRotate: (_settings, currentState, payload) => {
+    const step = 10;
+    const delta = payload.ticks > 0 ? step : -step;
+    const newPosition = Math.max(0, Math.min(100, (currentState.position ?? 0) + delta));
+    return { ...currentState, position: newPosition, targetPosition: newPosition };
+  },
 
-  const host = typeof payload.host === 'string' ? payload.host : '';
-  const token = typeof payload.token === 'string' ? payload.token : '';
-  const serial = typeof payload.serial === 'string' ? payload.serial : '';
+  /**
+   * Handle dial rotation for position control (sends to hub)
+   * @param {import('../lib/spruthub').SprutHubClient} client
+   * @param {CoverSettings} settings
+   * @param {CoverState} currentState
+   * @param {{ticks: number}} payload
+   * @returns {Promise<CoverState|null>}
+   */
+  handleDialRotate: async (client, settings, currentState, payload) => {
+    const { accessoryId, serviceId, targetPositionCharId } = settings;
+    if (accessoryId == null || serviceId == null || targetPositionCharId == null) return null;
 
-  if (payload.event) {
-    switch (payload.event) {
-      case 'testConnection':
-        handleTestConnection(host, token, serial);
-        return true;
+    const step = 10;
+    const delta = payload.ticks > 0 ? step : -step;
+    const newPosition = Math.max(0, Math.min(100, (currentState.position ?? 0) + delta));
 
-      case 'getDevices':
-        handleGetDevices(host, token, serial);
-        return true;
-    }
-  }
+    await client.updateCharacteristic(accessoryId, serviceId, targetPositionCharId, newPosition);
 
-  if (payload.accessoryId && payload.serviceId && payload.targetPositionCharId) {
-    handleSettingsFromPI(context, payload);
-    return true;
-  }
+    return { ...currentState, position: newPosition, targetPosition: newPosition };
+  },
 
-  return false;
-}
-
-/**
- * Handle settings update from PI
- * @param {string} context - Action context
- * @param {SendToPluginPayload} payload - Settings from PI
- * @returns {void}
- */
-function handleSettingsFromPI(context, payload) {
-  /** @type {CoverSettings} */
-  const settings = {
+  mapSettings: (payload) => ({
     host: typeof payload.host === 'string' ? payload.host : undefined,
     token: typeof payload.token === 'string' ? payload.token : undefined,
     serial: typeof payload.serial === 'string' ? payload.serial : undefined,
@@ -596,212 +259,11 @@ function handleSettingsFromPI(context, payload) {
       typeof payload.currentPositionCharId === 'number' ? payload.currentPositionCharId : undefined,
     customName: typeof payload.customName === 'string' ? payload.customName : undefined,
     action: typeof payload.action === 'string' ? payload.action : undefined,
-  };
-
-  log('[Cover] Received settings from PI:', settings);
-
-  const ctx = getContext(context);
-  const oldSettings = /** @type {CoverSettings|undefined} */ (ctx?.settings);
-
-  const deviceChanged =
-    !oldSettings ||
-    oldSettings.accessoryId !== settings.accessoryId ||
-    oldSettings.serviceId !== settings.serviceId;
-
-  if (ctx) {
-    ctx.settings = settings;
-  } else {
-    setContext(context, { settings, state: { position: 0 } });
-  }
-
-  if (!deviceChanged && ctx?.state) {
-    updateButton(context, settings, /** @type {CoverState} */ (ctx.state));
-    return;
-  }
-
-  updateButton(context, settings, { position: 0, connecting: true });
-
-  fetchCoverState(settings).then((state) => {
-    const c = getContext(context);
-    if (c) {
-      c.state = state;
-      updateButton(context, settings, state);
-    }
-  });
-}
-
-/**
- * Handle test connection request from PI
- * @param {string} host
- * @param {string} token
- * @param {string} serial
- * @returns {Promise<void>}
- */
-async function handleTestConnection(host, token, serial) {
-  log('[Cover] handleTestConnection:', { host, token: token ? '***' : undefined, serial });
-
-  try {
-    const client = getClient(host, token, serial);
-
-    if (!client) {
-      sendToPropertyInspector({
-        event: 'testResult',
-        success: false,
-        error: 'Missing connection parameters',
-      });
-      return;
-    }
-
-    await client.waitForConnection();
-
-    const [rooms, accessories] = await Promise.all([client.getRooms(), client.getAccessories()]);
-
-    log('[Cover] Got rooms:', rooms.length, 'accessories:', accessories.length);
-
-    const devices = accessories.filter((a) => {
-      const hasCover = SprutHubClient.findCoverService(a) !== undefined;
-      if (hasCover) {
-        log('[Cover] Found cover:', a.name, a.id);
-      }
-      return hasCover;
-    });
-
-    log('[Cover] Filtered covers:', devices.length);
-
-    sendToPropertyInspector({
-      event: 'testResult',
-      success: true,
-      rooms,
-      devices,
-    });
-
-    log('[Cover] Sent testResult to PI');
-  } catch (err) {
-    log('[Cover] testConnection error:', err);
-    sendToPropertyInspector({
-      event: 'testResult',
-      success: false,
-      error: err instanceof Error ? err.message : 'Unknown error',
-    });
-  }
-}
-
-/**
- * Handle get devices request from PI
- * @param {string} host
- * @param {string} token
- * @param {string} serial
- * @returns {Promise<void>}
- */
-async function handleGetDevices(host, token, serial) {
-  log('[Cover] handleGetDevices:', { host, token: token ? '***' : undefined, serial });
-
-  try {
-    const client = getClient(host, token, serial);
-
-    if (!client) {
-      sendToPropertyInspector({
-        event: 'error',
-        message: 'Missing connection parameters',
-      });
-      return;
-    }
-
-    await client.waitForConnection();
-
-    const [rooms, accessories] = await Promise.all([client.getRooms(), client.getAccessories()]);
-
-    const devices = accessories.filter((a) => SprutHubClient.findCoverService(a) !== undefined);
-
-    log('[Cover] handleGetDevices: found', rooms.length, 'rooms,', devices.length, 'covers');
-
-    sendToPropertyInspector({
-      event: 'deviceList',
-      rooms,
-      devices,
-    });
-
-    log('[Cover] Sent deviceList to PI');
-  } catch (err) {
-    sendToPropertyInspector({
-      event: 'error',
-      message: err instanceof Error ? err.message : 'Unknown error',
-    });
-  }
-}
-
-/**
- * Handle settings update
- * @param {string} context - Action context
- * @param {CoverSettings} settings - New settings
- * @returns {void}
- */
-function onSettingsUpdate(context, settings) {
-  const ctx = getContext(context);
-  const oldSettings = /** @type {CoverSettings|undefined} */ (ctx?.settings);
-
-  const deviceChanged =
-    !oldSettings ||
-    oldSettings.accessoryId !== settings.accessoryId ||
-    oldSettings.serviceId !== settings.serviceId;
-
-  if (ctx) {
-    ctx.settings = settings;
-  }
-
-  if (!deviceChanged && ctx?.state) {
-    updateButton(context, settings, /** @type {CoverState} */ (ctx.state));
-    return;
-  }
-
-  updateButton(context, settings, { position: 0, connecting: true });
-
-  fetchCoverState(settings).then((state) => {
-    const c = getContext(context);
-    if (c) {
-      c.state = state;
-      updateButton(context, settings, state);
-    }
-  });
-}
-
-/**
- * Handle didReceiveSettings event
- * @param {string} context - Action context
- * @param {SettingsPayload} payload - Settings payload
- * @returns {void}
- */
-function onDidReceiveSettings(context, payload) {
-  /** @type {CoverSettings} */
-  const settings = /** @type {CoverSettings} */ (payload?.settings || {});
-  onSettingsUpdate(context, settings);
-}
-
-/**
- * Handle propertyInspectorDidAppear event
- * @param {string} context - Action context
- * @returns {void}
- */
-function onPropertyInspectorDidAppear(context) {
-  const ctx = getContext(context);
-  /** @type {CoverSettings} */
-  const settings = /** @type {CoverSettings} */ (ctx?.settings || {});
-
-  if (settings.host && settings.token && settings.serial) {
-    handleGetDevices(settings.host, settings.token, settings.serial);
-  }
-}
+  }),
+});
 
 // ============================================================
 // Exports
 // ============================================================
 
-module.exports = {
-  onWillAppear,
-  onWillDisappear,
-  onKeyUp,
-  onSendToPlugin,
-  onSettingsUpdate,
-  onDidReceiveSettings,
-  onPropertyInspectorDidAppear,
-};
+module.exports = coverAction.getExports();

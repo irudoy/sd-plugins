@@ -41,6 +41,8 @@ export default [
       '**/cover/**/*.js',
       '**/thermostat/**/*.js',
       '**/sensor/**/*.js',
+      '**/button/**/*.js',
+      '**/pi-lib/**/*.js',
     ],
     languageOptions: {
       sourceType: 'module',
@@ -54,6 +56,8 @@ export default [
         $propEvent: 'readonly',
         $local: 'readonly',
         $back: 'readonly',
+        // Shared PI library
+        SprutHubPI: 'readonly',
       },
     },
     rules: {

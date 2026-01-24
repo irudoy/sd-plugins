@@ -7,6 +7,7 @@
     <link rel="stylesheet" href="../static/css/sdpi.css">
     <script src="../static/common.js"></script>
     <script src="../static/sd-action.js"></script>
+    <script src="../pi-lib/common.js"></script>
     <style>
         select {
             color: rgb(180, 180, 180);
@@ -72,7 +73,7 @@
         <!-- Connection Settings Button -->
         <div class="sdpi-item">
             <div class="sdpi-item-label empty"></div>
-            <button class="sdpi-item-value connection-btn" id="connectionBtn" onclick="toggleConnectionSettings()">Connection Settings</button>
+            <button class="sdpi-item-value connection-btn" id="connectionBtn" onclick="SprutHubPI.toggleConnectionSettings()">Connection Settings</button>
         </div>
 
         <!-- Connection Status -->
@@ -87,25 +88,25 @@
             <!-- Host -->
             <div class="sdpi-item">
                 <div class="sdpi-item-label">Host</div>
-                <input class="sdpi-item-value" type="text" id="host" placeholder="spruthub.local or IP" onchange="saveSettings()">
+                <input class="sdpi-item-value" type="text" id="host" placeholder="spruthub.local or IP" onchange="SprutHubPI.saveSettings()">
             </div>
 
             <!-- Token -->
             <div class="sdpi-item">
                 <div class="sdpi-item-label">Token</div>
-                <input class="sdpi-item-value" type="password" id="token" placeholder="API token" onchange="saveSettings()">
+                <input class="sdpi-item-value" type="password" id="token" placeholder="API token" onchange="SprutHubPI.saveSettings()">
             </div>
 
             <!-- Serial -->
             <div class="sdpi-item">
                 <div class="sdpi-item-label">Serial</div>
-                <input class="sdpi-item-value" type="text" id="serial" placeholder="Hub serial number" onchange="saveSettings()">
+                <input class="sdpi-item-value" type="text" id="serial" placeholder="Hub serial number" onchange="SprutHubPI.saveSettings()">
             </div>
 
             <!-- Test Connection Button -->
             <div class="sdpi-item">
                 <div class="sdpi-item-label empty"></div>
-                <button class="sdpi-item-value" id="testButton" onclick="testConnection()">Test Connection</button>
+                <button class="sdpi-item-value" id="testButton" onclick="SprutHubPI.testConnection()">Test Connection</button>
             </div>
 
             <!-- Status Message -->
@@ -122,7 +123,7 @@
         <!-- Room Select -->
         <div class="sdpi-item">
             <div class="sdpi-item-label">Room</div>
-            <select class="sdpi-item-value" id="roomSelect" onchange="filterDevices()">
+            <select class="sdpi-item-value" id="roomSelect" onchange="SprutHubPI.filterDevices()">
                 <option value="">-- All Rooms --</option>
             </select>
         </div>
@@ -130,7 +131,7 @@
         <!-- Device Select -->
         <div class="sdpi-item">
             <div class="sdpi-item-label">Device</div>
-            <select class="sdpi-item-value" id="deviceSelect" onchange="selectAccessory()">
+            <select class="sdpi-item-value" id="deviceSelect" onchange="SprutHubPI.selectAccessory()">
                 <option value="">-- Select Device --</option>
             </select>
         </div>
@@ -138,7 +139,7 @@
         <!-- Service Select (shown only if multiple) -->
         <div class="sdpi-item" id="serviceSelectRow" style="display: none;">
             <div class="sdpi-item-label">Switch</div>
-            <select class="sdpi-item-value" id="serviceSelect" onchange="selectService()">
+            <select class="sdpi-item-value" id="serviceSelect" onchange="SprutHubPI.selectService()">
                 <option value="">-- Select Switch --</option>
             </select>
         </div>
@@ -146,13 +147,13 @@
         <!-- Custom Name -->
         <div class="sdpi-item">
             <div class="sdpi-item-label">Name</div>
-            <input class="sdpi-item-value" type="text" id="customName" placeholder="Custom display name" onchange="saveSettings()">
+            <input class="sdpi-item-value" type="text" id="customName" placeholder="Custom display name" onchange="SprutHubPI.saveSettings()">
         </div>
 
         <!-- Refresh Button -->
         <div class="sdpi-item">
             <div class="sdpi-item-label empty"></div>
-            <button class="sdpi-item-value" onclick="refreshDevices()">Refresh Devices</button>
+            <button class="sdpi-item-value" onclick="SprutHubPI.refreshDevices()">Refresh Devices</button>
         </div>
 
         <div class="sdpi-heading">Action</div>
@@ -160,7 +161,7 @@
         <!-- Action Select -->
         <div class="sdpi-item">
             <div class="sdpi-item-label">On Press</div>
-            <select class="sdpi-item-value" id="actionSelect" onchange="saveSettings()">
+            <select class="sdpi-item-value" id="actionSelect" onchange="SprutHubPI.saveSettings()">
                 <option value="toggle">Toggle</option>
                 <option value="on">Turn On</option>
                 <option value="off">Turn Off</option>

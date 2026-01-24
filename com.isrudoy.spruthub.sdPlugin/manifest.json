@@ -8,7 +8,7 @@
           "Image": "static/img/lightAction"
         }
       ],
-      "Controllers": ["Keypad"],
+      "Controllers": ["Keypad", "Knob"],
       "UUID": "com.isrudoy.spruthub.light",
       "PropertyInspectorPath": "light/index.html",
       "Tooltip": "Control Sprut.Hub lights"
@@ -60,7 +60,7 @@
           "Image": "static/img/lightAction"
         }
       ],
-      "Controllers": ["Keypad"],
+      "Controllers": ["Keypad", "Knob"],
       "UUID": "com.isrudoy.spruthub.cover",
       "PropertyInspectorPath": "cover/index.html",
       "Tooltip": "Control Sprut.Hub window coverings"
@@ -73,7 +73,7 @@
           "Image": "static/img/lightAction"
         }
       ],
-      "Controllers": ["Keypad"],
+      "Controllers": ["Keypad", "Knob"],
       "UUID": "com.isrudoy.spruthub.thermostat",
       "PropertyInspectorPath": "thermostat/index.html",
       "Tooltip": "Control Sprut.Hub thermostats"
