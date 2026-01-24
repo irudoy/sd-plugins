@@ -5,7 +5,7 @@
  */
 
 const { COVER_ACTION, COLORS } = require('../lib/common');
-const { BaseAction, SprutHubClient } = require('../lib/base-action');
+const { BaseAction, SprutHubClient, mapBaseSettings } = require('../lib/base-action');
 const {
   createButtonCanvas,
   drawStatusBar,
@@ -127,11 +127,11 @@ function getPositionText(position, targetPosition) {
  * Render cover state to button image
  * @param {CoverSettings} settings
  * @param {CoverState} state
+ * @param {string} name
  * @returns {string}
  */
-function renderState(settings, state) {
+function renderState(settings, state, name) {
   const { canvas, ctx } = createButtonCanvas();
-  const name = getDisplayName(settings);
   const position = state.position ?? 0;
   const color = getPositionColor(position);
 
@@ -141,19 +141,6 @@ function renderState(settings, state) {
   drawStatusBar(ctx, color);
 
   return canvas.toDataURL('image/png');
-}
-
-/**
- * Get display name
- * @param {CoverSettings} settings
- * @returns {string}
- */
-function getDisplayName(settings) {
-  if (settings.customName) return settings.customName;
-  if (settings.serviceName && settings.serviceName !== settings.accessoryName) {
-    return settings.serviceName;
-  }
-  return settings.accessoryName || 'Cover';
 }
 
 // ============================================================
@@ -245,19 +232,11 @@ const coverAction = new BaseAction({
   },
 
   mapSettings: (payload) => ({
-    host: typeof payload.host === 'string' ? payload.host : undefined,
-    token: typeof payload.token === 'string' ? payload.token : undefined,
-    serial: typeof payload.serial === 'string' ? payload.serial : undefined,
-    accessoryId: typeof payload.accessoryId === 'number' ? payload.accessoryId : undefined,
-    accessoryName: typeof payload.accessoryName === 'string' ? payload.accessoryName : undefined,
-    serviceId: typeof payload.serviceId === 'number' ? payload.serviceId : undefined,
-    serviceName: typeof payload.serviceName === 'string' ? payload.serviceName : undefined,
+    ...mapBaseSettings(payload),
     targetPositionCharId:
       typeof payload.targetPositionCharId === 'number' ? payload.targetPositionCharId : undefined,
     currentPositionCharId:
       typeof payload.currentPositionCharId === 'number' ? payload.currentPositionCharId : undefined,
-    customName: typeof payload.customName === 'string' ? payload.customName : undefined,
-    action: typeof payload.action === 'string' ? payload.action : undefined,
   }),
 });
 

@@ -1,0 +1,6 @@
+- отключить логирование, добавить в claude.md не забывать про это в конце работы над плагином
+- скопировать во все плагины reference/StreamDock-Plugin-SDK/SDVueSDK/vue/src/types/_streamdock.d.ts, перевести комментарии и использовать его
+- SprutHubClient -> SprutHub переименовать
+- переименовать lightIcon -> spruthubIcon
+- static/img/lightAction -> commonAction
+- решить проблемы с типами, например com.isrudoy.spruthub.sdPlugin/outlet/index.js:36 тут сейчас SprutHubPI any

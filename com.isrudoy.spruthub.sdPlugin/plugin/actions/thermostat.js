@@ -5,7 +5,7 @@
  */
 
 const { THERMOSTAT_ACTION, COLORS } = require('../lib/common');
-const { BaseAction, SprutHubClient } = require('../lib/base-action');
+const { BaseAction, SprutHubClient, mapBaseSettings } = require('../lib/base-action');
 const { createButtonCanvas, drawStatusBar, CANVAS_CENTER, LAYOUT } = require('../lib/draw-common');
 
 // ============================================================
@@ -145,19 +145,6 @@ function drawThermometerIcon(ctx, x, y, size, color, fillLevel = 0.5) {
   }
 }
 
-/**
- * Get display name
- * @param {ThermostatSettings} settings
- * @returns {string}
- */
-function getDisplayName(settings) {
-  if (settings.customName) return settings.customName;
-  if (settings.serviceName && settings.serviceName !== settings.accessoryName) {
-    return settings.serviceName;
-  }
-  return settings.accessoryName || 'Thermostat';
-}
-
 // ============================================================
 // State Rendering
 // ============================================================
@@ -166,11 +153,11 @@ function getDisplayName(settings) {
  * Render thermostat state to button image
  * @param {ThermostatSettings} settings
  * @param {ThermostatState} state
+ * @param {string} name
  * @returns {string}
  */
-function renderState(settings, state) {
+function renderState(settings, state, name) {
   const { canvas, ctx } = createButtonCanvas();
-  const name = getDisplayName(settings);
   const currentTemp = state.currentTemp ?? 0;
   const targetTemp = state.targetTemp ?? 0;
   const mode = state.currentMode ?? 0;
@@ -318,13 +305,7 @@ const thermostatAction = new BaseAction({
   },
 
   mapSettings: (payload) => ({
-    host: typeof payload.host === 'string' ? payload.host : undefined,
-    token: typeof payload.token === 'string' ? payload.token : undefined,
-    serial: typeof payload.serial === 'string' ? payload.serial : undefined,
-    accessoryId: typeof payload.accessoryId === 'number' ? payload.accessoryId : undefined,
-    accessoryName: typeof payload.accessoryName === 'string' ? payload.accessoryName : undefined,
-    serviceId: typeof payload.serviceId === 'number' ? payload.serviceId : undefined,
-    serviceName: typeof payload.serviceName === 'string' ? payload.serviceName : undefined,
+    ...mapBaseSettings(payload),
     currentTempCharId:
       typeof payload.currentTempCharId === 'number' ? payload.currentTempCharId : undefined,
     targetTempCharId:
@@ -333,8 +314,6 @@ const thermostatAction = new BaseAction({
       typeof payload.currentModeCharId === 'number' ? payload.currentModeCharId : undefined,
     targetModeCharId:
       typeof payload.targetModeCharId === 'number' ? payload.targetModeCharId : undefined,
-    customName: typeof payload.customName === 'string' ? payload.customName : undefined,
-    action: typeof payload.action === 'string' ? payload.action : undefined,
     tempStep: typeof payload.tempStep === 'number' ? payload.tempStep : undefined,
   }),
 });

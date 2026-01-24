@@ -5,7 +5,13 @@
  */
 
 const { SWITCH_ACTION, COLORS } = require('../lib/common');
-const { BaseAction, SprutHubClient } = require('../lib/base-action');
+const {
+  BaseAction,
+  SprutHubClient,
+  handleToggleKeyUp,
+  handleOnOffStateChange,
+  extractOnOffState,
+} = require('../lib/base-action');
 const {
   createButtonCanvas,
   drawStatusBar,
@@ -87,11 +93,11 @@ function drawSwitchIcon(ctx, x, y, size, color, isOn = false) {
  * Render switch state to button image
  * @param {SwitchSettings} settings
  * @param {SwitchState} state
+ * @param {string} name
  * @returns {string}
  */
-function renderState(settings, state) {
+function renderState(settings, state, name) {
   const { canvas, ctx } = createButtonCanvas();
-  const name = getDisplayName(settings);
 
   if (state.on) {
     drawSwitchIcon(ctx, CANVAS_CENTER, LAYOUT.bulbY, LAYOUT.bulbSize, COLORS.warmYellow, true);
@@ -107,19 +113,6 @@ function renderState(settings, state) {
   return canvas.toDataURL('image/png');
 }
 
-/**
- * Get display name
- * @param {SwitchSettings} settings
- * @returns {string}
- */
-function getDisplayName(settings) {
-  if (settings.customName) return settings.customName;
-  if (settings.serviceName && settings.serviceName !== settings.accessoryName) {
-    return settings.serviceName;
-  }
-  return settings.accessoryName || 'Switch';
-}
-
 // ============================================================
 // Action Configuration
 // ============================================================
@@ -132,41 +125,13 @@ const switchAction = new BaseAction({
 
   findService: (accessory) => SprutHubClient.findSwitchService(accessory),
 
-  extractState: (_accessory, service, _settings) => {
-    const onChar = SprutHubClient.findOnCharacteristic(service);
-    const onValue = SprutHubClient.extractValue(onChar?.control?.value);
-    return { on: Boolean(onValue) };
-  },
+  extractState: extractOnOffState,
 
   renderState,
 
-  handleStateChange: (state, settings, characteristicId, value) => {
-    if (
-      settings.characteristicId === characteristicId ||
-      characteristicId === SprutHubClient.CHAR_ON
-    ) {
-      return { ...state, on: Boolean(value) };
-    }
-    return state;
-  },
+  handleStateChange: handleOnOffStateChange,
 
-  handleKeyUp: async (client, settings, currentState) => {
-    const { accessoryId, serviceId, characteristicId, action } = settings;
-    if (accessoryId == null || serviceId == null || characteristicId == null) return null;
-
-    let newValue;
-    if (action === 'on') {
-      newValue = true;
-    } else if (action === 'off') {
-      newValue = false;
-    } else {
-      newValue = !currentState.on;
-    }
-
-    await client.updateCharacteristic(accessoryId, serviceId, characteristicId, newValue);
-
-    return { ...currentState, on: newValue };
-  },
+  handleKeyUp: handleToggleKeyUp,
 });
 
 // ============================================================

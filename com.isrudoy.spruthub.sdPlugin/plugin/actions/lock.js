@@ -5,7 +5,7 @@
  */
 
 const { LOCK_ACTION, COLORS } = require('../lib/common');
-const { BaseAction, SprutHubClient } = require('../lib/base-action');
+const { BaseAction, SprutHubClient, mapBaseSettings } = require('../lib/base-action');
 const {
   createButtonCanvas,
   drawStatusBar,
@@ -140,11 +140,11 @@ function drawLockIcon(ctx, x, y, size, color, isLocked = true) {
  * Render lock state to button image
  * @param {LockSettings} settings
  * @param {LockState} state
+ * @param {string} name
  * @returns {string}
  */
-function renderState(settings, state) {
+function renderState(settings, state, name) {
   const { canvas, ctx } = createButtonCanvas();
-  const name = getDisplayName(settings);
 
   if (state.locked) {
     drawLockIcon(ctx, CANVAS_CENTER, LAYOUT.bulbY - 10, LAYOUT.bulbSize, LOCK_COLORS.locked, true);
@@ -166,19 +166,6 @@ function renderState(settings, state) {
   }
 
   return canvas.toDataURL('image/png');
-}
-
-/**
- * Get display name
- * @param {LockSettings} settings
- * @returns {string}
- */
-function getDisplayName(settings) {
-  if (settings.customName) return settings.customName;
-  if (settings.serviceName && settings.serviceName !== settings.accessoryName) {
-    return settings.serviceName;
-  }
-  return settings.accessoryName || 'Lock';
 }
 
 // ============================================================
@@ -230,19 +217,9 @@ const lockAction = new BaseAction({
   },
 
   mapSettings: (payload) => ({
-    host: typeof payload.host === 'string' ? payload.host : undefined,
-    token: typeof payload.token === 'string' ? payload.token : undefined,
-    serial: typeof payload.serial === 'string' ? payload.serial : undefined,
-    accessoryId: typeof payload.accessoryId === 'number' ? payload.accessoryId : undefined,
-    accessoryName: typeof payload.accessoryName === 'string' ? payload.accessoryName : undefined,
-    serviceId: typeof payload.serviceId === 'number' ? payload.serviceId : undefined,
-    serviceName: typeof payload.serviceName === 'string' ? payload.serviceName : undefined,
-    characteristicId:
-      typeof payload.characteristicId === 'number' ? payload.characteristicId : undefined,
+    ...mapBaseSettings(payload),
     currentStateCharId:
       typeof payload.currentStateCharId === 'number' ? payload.currentStateCharId : undefined,
-    customName: typeof payload.customName === 'string' ? payload.customName : undefined,
-    action: typeof payload.action === 'string' ? payload.action : undefined,
   }),
 });
 

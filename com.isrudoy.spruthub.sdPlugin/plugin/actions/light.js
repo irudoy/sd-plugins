@@ -5,7 +5,12 @@
  */
 
 const { LIGHT_ACTION, COLORS } = require('../lib/common');
-const { BaseAction, SprutHubClient } = require('../lib/base-action');
+const {
+  BaseAction,
+  SprutHubClient,
+  mapBaseSettings,
+  handleToggleKeyUp,
+} = require('../lib/base-action');
 const {
   createButtonCanvas,
   drawStatusBar,
@@ -106,11 +111,11 @@ function drawLightbulb(ctx, x, y, size, color) {
  * Render light state to button image
  * @param {LightSettings} settings
  * @param {LightState} state
+ * @param {string} name
  * @returns {string}
  */
-function renderState(settings, state) {
+function renderState(settings, state, name) {
   const { canvas, ctx } = createButtonCanvas();
-  const name = getDisplayName(settings);
 
   if (state.on) {
     // On state
@@ -130,19 +135,6 @@ function renderState(settings, state) {
   }
 
   return canvas.toDataURL('image/png');
-}
-
-/**
- * Get display name
- * @param {LightSettings} settings
- * @returns {string}
- */
-function getDisplayName(settings) {
-  if (settings.customName) return settings.customName;
-  if (settings.serviceName && settings.serviceName !== settings.accessoryName) {
-    return settings.serviceName;
-  }
-  return settings.accessoryName || 'Light';
 }
 
 // ============================================================
@@ -187,23 +179,7 @@ const lightAction = new BaseAction({
     return newState;
   },
 
-  handleKeyUp: async (client, settings, currentState) => {
-    const { accessoryId, serviceId, characteristicId, action } = settings;
-    if (accessoryId == null || serviceId == null || characteristicId == null) return null;
-
-    let newValue;
-    if (action === 'on') {
-      newValue = true;
-    } else if (action === 'off') {
-      newValue = false;
-    } else {
-      newValue = !currentState.on;
-    }
-
-    await client.updateCharacteristic(accessoryId, serviceId, characteristicId, newValue);
-
-    return { ...currentState, on: newValue };
-  },
+  handleKeyUp: handleToggleKeyUp,
 
   /**
    * Preview dial rotation (UI only, no API call)
@@ -278,17 +254,7 @@ const lightAction = new BaseAction({
   },
 
   mapSettings: (payload) => ({
-    host: typeof payload.host === 'string' ? payload.host : undefined,
-    token: typeof payload.token === 'string' ? payload.token : undefined,
-    serial: typeof payload.serial === 'string' ? payload.serial : undefined,
-    accessoryId: typeof payload.accessoryId === 'number' ? payload.accessoryId : undefined,
-    accessoryName: typeof payload.accessoryName === 'string' ? payload.accessoryName : undefined,
-    serviceId: typeof payload.serviceId === 'number' ? payload.serviceId : undefined,
-    serviceName: typeof payload.serviceName === 'string' ? payload.serviceName : undefined,
-    characteristicId:
-      typeof payload.characteristicId === 'number' ? payload.characteristicId : undefined,
-    customName: typeof payload.customName === 'string' ? payload.customName : undefined,
-    action: typeof payload.action === 'string' ? payload.action : undefined,
+    ...mapBaseSettings(payload),
     brightnessStep: typeof payload.brightnessStep === 'number' ? payload.brightnessStep : undefined,
   }),
 });

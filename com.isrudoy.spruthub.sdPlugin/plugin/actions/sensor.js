@@ -6,7 +6,7 @@
  */
 
 const { SENSOR_ACTION, COLORS } = require('../lib/common');
-const { BaseAction, SprutHubClient } = require('../lib/base-action');
+const { BaseAction, SprutHubClient, mapBaseSettings } = require('../lib/base-action');
 const { getContext } = require('../lib/state');
 const { createButtonCanvas, CANVAS_CENTER } = require('../lib/draw-common');
 
@@ -245,19 +245,6 @@ function getValueText(sensorType, value) {
   }
 }
 
-/**
- * Get display name
- * @param {SensorSettings} settings
- * @returns {string}
- */
-function getDisplayName(settings) {
-  if (settings.customName) return settings.customName;
-  if (settings.serviceName && settings.serviceName !== settings.accessoryName) {
-    return settings.serviceName;
-  }
-  return settings.accessoryName || 'Sensor';
-}
-
 // ============================================================
 // State Rendering
 // ============================================================
@@ -266,11 +253,11 @@ function getDisplayName(settings) {
  * Render sensor state to button image
  * @param {SensorSettings} settings
  * @param {SensorState} state
+ * @param {string} name
  * @returns {string}
  */
-function renderState(settings, state) {
+function renderState(settings, state, name) {
   const { canvas, ctx } = createButtonCanvas();
-  const name = getDisplayName(settings);
   const sensorType = settings.sensorType || state.sensorType || 'temperature';
   const value = state.value ?? 0;
 
@@ -359,17 +346,8 @@ const sensorAction = new BaseAction({
   },
 
   mapSettings: (payload) => ({
-    host: typeof payload.host === 'string' ? payload.host : undefined,
-    token: typeof payload.token === 'string' ? payload.token : undefined,
-    serial: typeof payload.serial === 'string' ? payload.serial : undefined,
-    accessoryId: typeof payload.accessoryId === 'number' ? payload.accessoryId : undefined,
-    accessoryName: typeof payload.accessoryName === 'string' ? payload.accessoryName : undefined,
-    serviceId: typeof payload.serviceId === 'number' ? payload.serviceId : undefined,
-    serviceName: typeof payload.serviceName === 'string' ? payload.serviceName : undefined,
-    characteristicId:
-      typeof payload.characteristicId === 'number' ? payload.characteristicId : undefined,
+    ...mapBaseSettings(payload),
     sensorType: typeof payload.sensorType === 'string' ? payload.sensorType : undefined,
-    customName: typeof payload.customName === 'string' ? payload.customName : undefined,
   }),
 });
 

@@ -121,6 +121,7 @@ const {
  * @callback RenderStateFn
  * @param {BaseSettings} settings - Current settings
  * @param {BaseState} state - Current state
+ * @param {string} displayName - Device display name
  * @returns {string} - Base64 PNG data URL
  */
 
@@ -185,6 +186,88 @@ const {
  * @property {DialHandlerFn} [handleDialRotate] - Function to handle dial rotation (knob)
  * @property {PreviewDialFn} [previewDialRotate] - Function to preview dial rotation (UI only, no API)
  */
+
+// ============================================================
+// Utility Functions
+// ============================================================
+
+/**
+ * Map base settings from PI payload
+ * @param {SendToPluginPayload} payload - PI payload
+ * @returns {BaseSettings}
+ */
+function mapBaseSettings(payload) {
+  return {
+    host: typeof payload.host === 'string' ? payload.host : undefined,
+    token: typeof payload.token === 'string' ? payload.token : undefined,
+    serial: typeof payload.serial === 'string' ? payload.serial : undefined,
+    accessoryId: typeof payload.accessoryId === 'number' ? payload.accessoryId : undefined,
+    accessoryName: typeof payload.accessoryName === 'string' ? payload.accessoryName : undefined,
+    serviceId: typeof payload.serviceId === 'number' ? payload.serviceId : undefined,
+    serviceName: typeof payload.serviceName === 'string' ? payload.serviceName : undefined,
+    characteristicId:
+      typeof payload.characteristicId === 'number' ? payload.characteristicId : undefined,
+    customName: typeof payload.customName === 'string' ? payload.customName : undefined,
+    action: typeof payload.action === 'string' ? payload.action : undefined,
+  };
+}
+
+/**
+ * Standard toggle key up handler for on/off devices (light, switch, outlet)
+ * Handles 'on', 'off', and 'toggle' actions
+ * @param {SprutHubClient} client - Connected client
+ * @param {BaseSettings} settings - Current settings
+ * @param {BaseState} currentState - Current state
+ * @returns {Promise<BaseState|null>} - New state or null
+ */
+async function handleToggleKeyUp(client, settings, currentState) {
+  const { accessoryId, serviceId, characteristicId, action } = settings;
+  if (accessoryId == null || serviceId == null || characteristicId == null) return null;
+
+  let newValue;
+  if (action === 'on') {
+    newValue = true;
+  } else if (action === 'off') {
+    newValue = false;
+  } else {
+    newValue = !currentState.on;
+  }
+
+  await client.updateCharacteristic(accessoryId, serviceId, characteristicId, newValue);
+
+  return { ...currentState, on: newValue };
+}
+
+/**
+ * Standard state change handler for simple on/off devices (switch, outlet)
+ * @param {BaseState} state - Current state
+ * @param {BaseSettings} settings - Current settings
+ * @param {number} characteristicId - Changed characteristic ID
+ * @param {unknown} value - New value
+ * @returns {BaseState} - Updated state
+ */
+function handleOnOffStateChange(state, settings, characteristicId, value) {
+  if (
+    settings.characteristicId === characteristicId ||
+    characteristicId === SprutHubClient.CHAR_ON
+  ) {
+    return { ...state, on: Boolean(value) };
+  }
+  return state;
+}
+
+/**
+ * Standard state extractor for simple on/off devices (switch, outlet)
+ * @param {SprutHubAccessory} _accessory - Accessory object (unused)
+ * @param {SprutHubService} service - Service object
+ * @param {BaseSettings} _settings - Settings (unused)
+ * @returns {BaseState} - Extracted state
+ */
+function extractOnOffState(_accessory, service, _settings) {
+  const onChar = SprutHubClient.findOnCharacteristic(service);
+  const onValue = SprutHubClient.extractValue(onChar?.control?.value);
+  return { on: Boolean(onValue) };
+}
 
 // ============================================================
 // BaseAction Class
@@ -366,7 +449,11 @@ class BaseAction {
     } else if (state?.offline) {
       imageData = drawOfflineWithIcon(this.drawIcon, this.getDisplayName(settings));
     } else {
-      imageData = this.renderState(settings, state || this.initialState);
+      imageData = this.renderState(
+        settings,
+        state || this.initialState,
+        this.getDisplayName(settings)
+      );
     }
 
     setImage(context, imageData);
@@ -682,19 +769,7 @@ class BaseAction {
    * @returns {BaseSettings}
    */
   defaultMapSettings(payload) {
-    return {
-      host: typeof payload.host === 'string' ? payload.host : undefined,
-      token: typeof payload.token === 'string' ? payload.token : undefined,
-      serial: typeof payload.serial === 'string' ? payload.serial : undefined,
-      accessoryId: typeof payload.accessoryId === 'number' ? payload.accessoryId : undefined,
-      accessoryName: typeof payload.accessoryName === 'string' ? payload.accessoryName : undefined,
-      serviceId: typeof payload.serviceId === 'number' ? payload.serviceId : undefined,
-      serviceName: typeof payload.serviceName === 'string' ? payload.serviceName : undefined,
-      characteristicId:
-        typeof payload.characteristicId === 'number' ? payload.characteristicId : undefined,
-      customName: typeof payload.customName === 'string' ? payload.customName : undefined,
-      action: typeof payload.action === 'string' ? payload.action : undefined,
-    };
+    return mapBaseSettings(payload);
   }
 
   /**
@@ -889,4 +964,11 @@ class BaseAction {
 // Exports
 // ============================================================
 
-module.exports = { BaseAction, SprutHubClient };
+module.exports = {
+  BaseAction,
+  SprutHubClient,
+  mapBaseSettings,
+  handleToggleKeyUp,
+  handleOnOffStateChange,
+  extractOnOffState,
+};
