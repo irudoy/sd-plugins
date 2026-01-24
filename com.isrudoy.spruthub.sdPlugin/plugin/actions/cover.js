@@ -232,17 +232,16 @@ const coverAction = new BaseAction({
    * @param {{ticks: number}} payload
    * @returns {Promise<CoverState|null>}
    */
-  handleDialRotate: async (client, settings, currentState, payload) => {
+  handleDialRotate: async (client, settings, currentState, _payload) => {
     const { accessoryId, serviceId, targetPositionCharId } = settings;
     if (accessoryId == null || serviceId == null || targetPositionCharId == null) return null;
 
-    const step = 10;
-    const delta = payload.ticks > 0 ? step : -step;
-    const newPosition = Math.max(0, Math.min(100, (currentState.position ?? 0) + delta));
+    // State already updated by preview, just send current value to hub
+    const position = currentState.position ?? 0;
 
-    await client.updateCharacteristic(accessoryId, serviceId, targetPositionCharId, newPosition);
+    await client.updateCharacteristic(accessoryId, serviceId, targetPositionCharId, position);
 
-    return { ...currentState, position: newPosition, targetPosition: newPosition };
+    return currentState;
   },
 
   mapSettings: (payload) => ({
