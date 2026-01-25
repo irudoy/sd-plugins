@@ -451,7 +451,7 @@ function getExtraPluginSettings() {
 // Initialize PI
 // ============================================================
 
-const $propEvent = SprutHubPI.init({
+const $propEvent = SprutHubPI.initDeviceSelection({
   deviceSelectId: 'deviceSelect',
   serviceLabel: 'Button',
   isServiceFn: isButtonService,

@@ -21,7 +21,7 @@ let customName = null;
 /** @type {Array<{index: string, name: string, desc?: string}>} */
 let scenarios = [];
 
-/** @type {ReturnType<typeof SprutHubPI.initConnectionOnly>|null} */
+/** @type {ReturnType<typeof SprutHubPI.initConnection>|null} */
 let piInit = null;
 
 // ============================================================
@@ -104,7 +104,7 @@ function populateScenarios(list) {
  * Request scenarios from plugin
  */
 function loadScenarios() {
-  const conn = piInit?.getConnectionSettings();
+  const conn = SprutHubPI.getConnectionSettings();
 
   if (!conn?.host || !conn?.token || !conn?.serial) {
     return;
@@ -142,7 +142,7 @@ function handleSendToPI(data) {
 // ============================================================
 
 // Initialize connection settings using shared library
-piInit = SprutHubPI.initConnectionOnly({
+piInit = SprutHubPI.initConnection({
   onSendToPropertyInspector: handleSendToPI,
 });
 
@@ -165,7 +165,7 @@ const $propEvent = {
   didReceiveGlobalSettings(data) {
     basePropEvent.didReceiveGlobalSettings(data);
     // Auto-load scenarios when we have connection settings
-    const conn = piInit?.getConnectionSettings();
+    const conn = SprutHubPI.getConnectionSettings();
     if (conn?.host && conn?.token && conn?.serial) {
       loadScenarios();
     }

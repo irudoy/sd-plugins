@@ -1,8 +1,10 @@
 /**
  * Shared Property Inspector Library for Sprut.Hub Plugin
- * Extracts common functionality from all PI files
+ * Composable architecture: initConnection() + initDeviceSelection()
  * @module pi-lib/common
  */
+
+/* global document, window, $settings, $websocket, $uuid */
 
 // ============================================================
 // Type Definitions
@@ -51,16 +53,22 @@
  */
 
 /**
- * @typedef {Object} PIConfig
+ * @typedef {Object} DeviceSelectionConfig
  * @property {string} deviceSelectId - DOM ID for device select element
- * @property {string} serviceLabel - Label for service dropdown (e.g., 'Lightbulb', 'Thermostat')
+ * @property {string} serviceLabel - Label for service dropdown
  * @property {(service: PIService) => boolean} isServiceFn - Check if service matches type
  * @property {(service: PIService) => Record<string, number|undefined>} findCharacteristicsFn - Find characteristic IDs
- * @property {string} defaultAction - Default action value (e.g., 'toggle', 'tempUp')
+ * @property {string} defaultAction - Default action value
  * @property {() => void} [loadExtraSettings] - Load extra settings fields
  * @property {() => void} [saveExtraSettings] - Save extra settings fields
- * @property {() => Record<string, unknown>} [getExtraPluginSettings] - Get extra settings to send to plugin
- * @property {(accessory: PIAccessory|null, services: PIService[]) => void} [onAccessorySelected] - Called when accessory is selected
+ * @property {() => Record<string, unknown>} [getExtraPluginSettings] - Get extra settings for plugin
+ * @property {(accessory: PIAccessory|null, services: PIService[]) => void} [onAccessorySelected] - Accessory selected callback
+ */
+
+/**
+ * @callback SendToPIHandler
+ * @param {Record<string, unknown>} data
+ * @returns {boolean} - true if handled
  */
 
 // ============================================================
@@ -82,8 +90,11 @@ let rooms = [];
 /** @type {PIAccessory[]} */
 let devices = [];
 
-/** @type {PIConfig|null} */
-let piConfig = null;
+/** @type {DeviceSelectionConfig|null} */
+let deviceConfig = null;
+
+/** @type {SendToPIHandler|null} */
+let customSendToPIHandler = null;
 
 // ============================================================
 // DOM Element Cache
@@ -91,6 +102,10 @@ let piConfig = null;
 
 /** @type {Record<string, HTMLElement|null>} */
 const $dom = {};
+
+// ============================================================
+// Connection Settings HTML
+// ============================================================
 
 /**
  * Generate Connection Settings HTML
@@ -130,12 +145,14 @@ function renderConnectionSettings() {
     </div>`;
 }
 
+// ============================================================
+// DOM Initialization
+// ============================================================
+
 /**
- * Initialize DOM element cache
- * @param {string} deviceSelectId - ID of device select element
+ * Initialize connection DOM elements
  */
-function initDom(deviceSelectId) {
-  // Inject connection settings HTML if container exists
+function initConnectionDom() {
   const container = document.getElementById('connectionSettingsContainer');
   if (container) {
     container.innerHTML = renderConnectionSettings();
@@ -148,599 +165,26 @@ function initDom(deviceSelectId) {
   $dom.host = document.getElementById('host');
   $dom.token = document.getElementById('token');
   $dom.serial = document.getElementById('serial');
+  $dom.testButton = document.getElementById('testButton');
+  $dom.statusMessage = document.getElementById('statusMessage');
+  $dom.customName = document.getElementById('customName');
+}
+
+/**
+ * Initialize device selection DOM elements
+ * @param {string} deviceSelectId
+ */
+function initDeviceSelectionDom(deviceSelectId) {
   $dom.roomSelect = document.getElementById('roomSelect');
   $dom.deviceSelect = document.getElementById(deviceSelectId);
   $dom.serviceSelectRow = document.getElementById('serviceSelectRow');
   $dom.serviceSelect = document.getElementById('serviceSelect');
-  $dom.customName = document.getElementById('customName');
   $dom.actionSelect = document.getElementById('actionSelect');
-  $dom.testButton = document.getElementById('testButton');
-  $dom.statusMessage = document.getElementById('statusMessage');
-}
-
-// ============================================================
-// Initialization
-// ============================================================
-
-/**
- * Initialize the Property Inspector with configuration
- * @param {PIConfig} config
- * @returns {{ $propEvent: object }}
- */
-function initPI(config) {
-  piConfig = config;
-  initDom(config.deviceSelectId);
-
-  return {
-    $propEvent: {
-      didReceiveSettings,
-      sendToPropertyInspector,
-      didReceiveGlobalSettings,
-    },
-  };
-}
-
-// ============================================================
-// StreamDock Event Handlers
-// ============================================================
-
-/**
- * Called when settings are received from StreamDock
- * @param {{settings: Record<string, unknown>}} data
- */
-function didReceiveSettings(data) {
-  const settings = data.settings || {};
-  loadSettings(settings);
-  requestGlobalSettings();
-}
-
-/**
- * Called when plugin sends data to PI
- * @param {{event?: string, rooms?: PIRoom[], devices?: PIAccessory[], lights?: PIAccessory[], success?: boolean, error?: string, message?: string}} data
- */
-function sendToPropertyInspector(data) {
-  if (!data) return;
-
-  switch (data.event) {
-    case 'deviceList':
-      rooms = data.rooms || [];
-      // Support both 'devices' and 'lights' for backwards compatibility
-      devices = data.devices || data.lights || [];
-      devicesLoaded = true;
-      populateRooms();
-      populateDevices();
-      updateConnectionStatus(true, globalSettings.host || getInputValue($dom.host));
-      break;
-
-    case 'testResult':
-      if (data.success) {
-        showStatus('Connection successful!', 'success');
-        rooms = data.rooms || [];
-        devices = data.devices || data.lights || [];
-        devicesLoaded = true;
-        populateRooms();
-        populateDevices();
-        saveGlobalSettings();
-        updateConnectionStatus(true, getInputValue($dom.host));
-        if (connectionSettingsVisible) {
-          toggleConnectionSettings();
-        }
-      } else {
-        showStatus('Error: ' + (data.error || 'Unknown error'), 'error');
-        updateConnectionStatus(false);
-      }
-      enableTestButton();
-      break;
-
-    case 'error':
-      showStatus('Error: ' + (data.message || 'Unknown error'), 'error');
-      break;
-  }
-}
-
-/**
- * Called when global settings are received
- * @param {{settings: GlobalSettings}} data
- */
-function didReceiveGlobalSettings(data) {
-  globalSettings = data.settings || {};
-  loadConnectionSettings(globalSettings);
-
-  // Sync global connection settings to local (for button operation)
-  if (typeof $settings !== 'undefined' && $settings) {
-    if (globalSettings.host) $settings.host = globalSettings.host;
-    if (globalSettings.token) $settings.token = globalSettings.token;
-    if (globalSettings.serial) $settings.serial = globalSettings.serial;
-  }
-
-  const hasCredentials = globalSettings.host && globalSettings.token && globalSettings.serial;
-
-  if (devicesLoaded && hasCredentials) {
-    updateConnectionStatus(true, globalSettings.host);
-  } else if (!hasCredentials) {
-    updateConnectionStatus(false);
-  }
-
-  // Request devices if we have credentials but haven't loaded them yet
-  if (!devicesLoaded && hasCredentials) {
-    sendToPlugin({
-      event: 'getDevices',
-      host: globalSettings.host,
-      token: globalSettings.token,
-      serial: globalSettings.serial,
-    });
-  }
-}
-
-// ============================================================
-// Device Population
-// ============================================================
-
-/**
- * Populate rooms dropdown
- */
-function populateRooms() {
-  const select = /** @type {HTMLSelectElement|null} */ ($dom.roomSelect);
-  if (!select) return;
-
-  const currentValue = select.value;
-  const savedRoomId =
-    typeof $settings !== 'undefined' && $settings?.roomId ? String($settings.roomId) : '';
-
-  select.innerHTML = '<option value="">-- All Rooms --</option>';
-
-  rooms.forEach((room) => {
-    const option = document.createElement('option');
-    option.value = String(room.id);
-    option.textContent = room.name;
-    select.appendChild(option);
-  });
-
-  if (currentValue) {
-    select.value = currentValue;
-  } else if (savedRoomId) {
-    select.value = savedRoomId;
-  }
-
-  populateDevices();
-}
-
-/**
- * Populate devices dropdown (filtered by room if selected)
- */
-function populateDevices() {
-  const select = /** @type {HTMLSelectElement|null} */ ($dom.deviceSelect);
-  if (!select) return;
-
-  const roomSelect = /** @type {HTMLSelectElement|null} */ ($dom.roomSelect);
-  const roomId = roomSelect?.value;
-  const currentValue = select.value;
-
-  select.innerHTML = '<option value="">-- Select Device --</option>';
-  hideServiceSelect();
-
-  if (devices.length === 0) {
-    const option = document.createElement('option');
-    option.value = '';
-    option.textContent = 'No devices found';
-    option.disabled = true;
-    select.appendChild(option);
-    return;
-  }
-
-  const filteredDevices = roomId ? devices.filter((d) => d.roomId === parseInt(roomId)) : devices;
-
-  filteredDevices.forEach((device) => {
-    const option = document.createElement('option');
-    option.value = String(device.id);
-    option.textContent = device.name;
-    select.appendChild(option);
-  });
-
-  // Restore selection
-  let restored = false;
-  if (currentValue && filteredDevices.some((d) => d.id === parseInt(currentValue))) {
-    select.value = currentValue;
-    restored = true;
-  } else if (typeof $settings !== 'undefined' && $settings && $settings.accessoryId) {
-    const accessoryId = String($settings.accessoryId);
-    if (filteredDevices.some((d) => d.id === parseInt(accessoryId))) {
-      select.value = accessoryId;
-      restored = true;
-    }
-  }
-
-  if (restored) {
-    populateServices();
-  }
-}
-
-/**
- * Filter devices when room changes
- */
-function filterDevices() {
-  const roomSelect = /** @type {HTMLSelectElement|null} */ ($dom.roomSelect);
-  const roomId = roomSelect?.value;
-  if (typeof $settings !== 'undefined' && $settings) {
-    $settings.roomId = roomId ? parseInt(roomId) : undefined;
-  }
-  populateDevices();
-}
-
-// ============================================================
-// Service Population
-// ============================================================
-
-/**
- * Hide service select row
- */
-function hideServiceSelect() {
-  if ($dom.serviceSelectRow) {
-    $dom.serviceSelectRow.style.display = 'none';
-  }
-}
-
-/**
- * Show service select row
- */
-function showServiceSelect() {
-  if ($dom.serviceSelectRow) {
-    $dom.serviceSelectRow.style.display = '';
-  }
-}
-
-/**
- * Populate services dropdown for selected accessory
- */
-function populateServices() {
-  if (!piConfig) return;
-
-  const deviceSelect = /** @type {HTMLSelectElement|null} */ ($dom.deviceSelect);
-  const accessoryId = deviceSelect?.value;
-  if (!accessoryId) {
-    hideServiceSelect();
-    return;
-  }
-
-  const accessory = devices.find((d) => d.id === parseInt(accessoryId));
-  if (!accessory) {
-    hideServiceSelect();
-    return;
-  }
-
-  const matchingServices = accessory.services?.filter(piConfig.isServiceFn) || [];
-
-  if (matchingServices.length === 0) {
-    hideServiceSelect();
-    return;
-  }
-
-  // Auto-select if only one service
-  if (matchingServices.length === 1) {
-    hideServiceSelect();
-    selectServiceById(matchingServices[0].sId);
-    return;
-  }
-
-  // Multiple services - show dropdown
-  showServiceSelect();
-
-  const select = /** @type {HTMLSelectElement|null} */ ($dom.serviceSelect);
-  if (!select) return;
-
-  select.innerHTML = `<option value="">-- Select ${piConfig.serviceLabel} --</option>`;
-
-  matchingServices.forEach((service) => {
-    const option = document.createElement('option');
-    option.value = String(service.sId);
-    option.textContent = service.name || `${piConfig.serviceLabel} ${service.sId}`;
-    select.appendChild(option);
-  });
-
-  // Restore saved selection
-  if (typeof $settings !== 'undefined' && $settings && $settings.serviceId) {
-    const savedServiceId = String($settings.serviceId);
-    if (matchingServices.some((s) => s.sId === parseInt(savedServiceId))) {
-      select.value = savedServiceId;
-    }
-  }
-}
-
-// ============================================================
-// Selection Handlers
-// ============================================================
-
-/**
- * Called when accessory is selected
- */
-function selectAccessory() {
-  const deviceSelect = /** @type {HTMLSelectElement|null} */ ($dom.deviceSelect);
-  const serviceSelect = /** @type {HTMLSelectElement|null} */ ($dom.serviceSelect);
-  const accessoryId = deviceSelect?.value;
-
-  // Clear service selection
-  if (serviceSelect) {
-    serviceSelect.value = '';
-  }
-
-  if (!accessoryId) {
-    hideServiceSelect();
-    if (typeof $settings !== 'undefined' && $settings) {
-      $settings.accessoryId = undefined;
-      $settings.accessoryName = undefined;
-      $settings.serviceId = undefined;
-      $settings.serviceName = undefined;
-      // Clear all characteristic IDs (handled by each PI's characteristic finder)
-    }
-    // Notify callback with null accessory
-    if (piConfig?.onAccessorySelected) {
-      piConfig.onAccessorySelected(null, []);
-    }
-    saveSettings();
-    return;
-  }
-
-  const accessory = devices.find((d) => d.id === parseInt(accessoryId));
-  if (!accessory) return;
-
-  if (typeof $settings !== 'undefined' && $settings) {
-    $settings.accessoryId = accessory.id;
-    $settings.accessoryName = accessory.name;
-  }
-
-  // Notify callback with accessory and matching services
-  if (piConfig?.onAccessorySelected) {
-    const matchingServices = accessory.services?.filter(piConfig.isServiceFn) || [];
-    piConfig.onAccessorySelected(accessory, matchingServices);
-  }
-
-  populateServices();
-}
-
-/**
- * Called when service is selected from dropdown
- */
-function selectService() {
-  const serviceSelect = /** @type {HTMLSelectElement|null} */ ($dom.serviceSelect);
-  const serviceId = serviceSelect?.value;
-  if (!serviceId) return;
-  selectServiceById(parseInt(serviceId));
-}
-
-/**
- * Select service by ID and save settings
- * @param {number} serviceId
- */
-function selectServiceById(serviceId) {
-  if (!piConfig) return;
-
-  const deviceSelect = /** @type {HTMLSelectElement|null} */ ($dom.deviceSelect);
-  const accessoryId = deviceSelect?.value;
-  if (!accessoryId) return;
-
-  const accessory = devices.find((d) => d.id === parseInt(accessoryId));
-  if (!accessory) return;
-
-  const service = accessory.services?.find((s) => s.sId === serviceId);
-  if (!service) return;
-
-  // Find characteristics using the device-specific function
-  const charIds = piConfig.findCharacteristicsFn(service);
-
-  if (typeof $settings !== 'undefined' && $settings) {
-    $settings.serviceId = service.sId;
-    $settings.serviceName = service.name;
-
-    // Set all characteristic IDs from the finder function
-    Object.entries(charIds).forEach(([key, value]) => {
-      $settings[key] = value;
-    });
-  }
-
-  saveSettings();
-}
-
-// ============================================================
-// Settings Management
-// ============================================================
-
-/**
- * Load settings into UI
- * @param {Record<string, unknown>} settings
- */
-function loadSettings(settings) {
-  const roomSelect = /** @type {HTMLSelectElement|null} */ ($dom.roomSelect);
-  const deviceSelect = /** @type {HTMLSelectElement|null} */ ($dom.deviceSelect);
-  const customName = /** @type {HTMLInputElement|null} */ ($dom.customName);
-  const actionSelect = /** @type {HTMLSelectElement|null} */ ($dom.actionSelect);
-
-  if (settings.roomId !== undefined && roomSelect) {
-    roomSelect.value = String(settings.roomId);
-  }
-
-  if (settings.accessoryId !== undefined && deviceSelect) {
-    deviceSelect.value = String(settings.accessoryId);
-  }
-
-  if (settings.customName !== undefined && customName) {
-    customName.value = String(settings.customName);
-  }
-
-  if (settings.action !== undefined && actionSelect) {
-    actionSelect.value = String(settings.action);
-  }
-
-  // Load extra settings if defined
-  if (piConfig?.loadExtraSettings) {
-    piConfig.loadExtraSettings();
-  }
-}
-
-/**
- * Load connection settings into UI
- * @param {GlobalSettings} settings
- */
-function loadConnectionSettings(settings) {
-  const host = /** @type {HTMLInputElement|null} */ ($dom.host);
-  const token = /** @type {HTMLInputElement|null} */ ($dom.token);
-  const serial = /** @type {HTMLInputElement|null} */ ($dom.serial);
-
-  if (settings.host !== undefined && host) {
-    host.value = settings.host;
-  }
-
-  if (settings.token !== undefined && token) {
-    token.value = settings.token;
-  }
-
-  if (settings.serial !== undefined && serial) {
-    serial.value = settings.serial;
-  }
-}
-
-/**
- * Save settings to StreamDock
- */
-function saveSettings() {
-  if (typeof $settings === 'undefined' || !$settings || !piConfig) return;
-
-  const customName = /** @type {HTMLInputElement|null} */ ($dom.customName);
-  const actionSelect = /** @type {HTMLSelectElement|null} */ ($dom.actionSelect);
-
-  // Connection settings
-  $settings.host = globalSettings.host || getInputValue($dom.host);
-  $settings.token = globalSettings.token || getInputValue($dom.token);
-  $settings.serial = globalSettings.serial || getInputValue($dom.serial);
-
-  // Common settings
-  $settings.customName = customName?.value?.trim() || '';
-  $settings.action = actionSelect?.value || piConfig.defaultAction;
-
-  // Save extra settings if defined
-  if (piConfig.saveExtraSettings) {
-    piConfig.saveExtraSettings();
-  }
-
-  sendSettingsToPlugin();
-}
-
-/**
- * Send settings to plugin
- */
-function sendSettingsToPlugin() {
-  if (!isWebSocketConnected() || !piConfig) return;
-  if (typeof $settings === 'undefined' || !$settings) return;
-
-  /** @type {Record<string, unknown>} */
-  const payload = {
-    host: globalSettings.host || '',
-    token: globalSettings.token || '',
-    serial: globalSettings.serial || '',
-    accessoryId: $settings.accessoryId,
-    accessoryName: $settings.accessoryName,
-    serviceId: $settings.serviceId,
-    serviceName: $settings.serviceName,
-    customName: $settings.customName,
-    action: $settings.action,
-  };
-
-  // Add all characteristic IDs and extra settings from settings
-  // These are set by selectServiceById based on findCharacteristicsFn
-  const charIdKeys = [
-    'characteristicId',
-    'currentPositionCharId',
-    'targetPositionCharId',
-    'currentStateCharId',
-    'currentTempCharId',
-    'targetTempCharId',
-    'currentModeCharId',
-    'targetModeCharId',
-    'valueCharId',
-    'brightnessStep',
-  ];
-
-  charIdKeys.forEach((key) => {
-    if ($settings[key] !== undefined) {
-      payload[key] = $settings[key];
-    }
-  });
-
-  // Add extra settings if defined
-  if (piConfig.getExtraPluginSettings) {
-    const extraSettings = piConfig.getExtraPluginSettings();
-    Object.assign(payload, extraSettings);
-  }
-
-  sendToPlugin(payload);
 }
 
 // ============================================================
 // Connection Management
 // ============================================================
-
-/**
- * Test connection to Sprut.Hub
- */
-function testConnection() {
-  const host = getInputValue($dom.host);
-  const token = getInputValue($dom.token);
-  const serial = getInputValue($dom.serial);
-
-  if (!host) {
-    showStatus('Please enter Host', 'error');
-    return;
-  }
-  if (!token) {
-    showStatus('Please enter Token', 'error');
-    return;
-  }
-  if (!serial) {
-    showStatus('Please enter Serial', 'error');
-    return;
-  }
-
-  showStatus('Testing connection...', 'info');
-  disableTestButton();
-
-  if (!isWebSocketConnected()) {
-    showStatus('Not connected to StreamDock', 'error');
-    enableTestButton();
-    return;
-  }
-
-  sendToPlugin({ event: 'testConnection', host, token, serial });
-
-  // Timeout
-  setTimeout(() => {
-    const testButton = /** @type {HTMLButtonElement|null} */ ($dom.testButton);
-    if (testButton?.disabled) {
-      showStatus('Connection timeout', 'error');
-      enableTestButton();
-    }
-  }, 15000);
-}
-
-/**
- * Refresh device list
- */
-function refreshDevices() {
-  const host = getInputValue($dom.host);
-  const token = getInputValue($dom.token);
-  const serial = getInputValue($dom.serial);
-
-  if (!host || !token || !serial) {
-    showStatus('Please fill in connection settings', 'error');
-    return;
-  }
-
-  if (!isWebSocketConnected()) {
-    showStatus('Not connected to StreamDock', 'error');
-    return;
-  }
-
-  showStatus('Refreshing devices...', 'info');
-  sendToPlugin({ event: 'getDevices', host, token, serial });
-}
 
 /**
  * Toggle connection settings panel
@@ -777,6 +221,69 @@ function updateConnectionStatus(connected, host) {
     $dom.connectionStatusText.textContent = 'No connection configured';
     $dom.connectionStatusText.className = 'connection-status disconnected';
   }
+}
+
+/**
+ * Test connection to Sprut.Hub
+ */
+function testConnection() {
+  const host = getInputValue($dom.host);
+  const token = getInputValue($dom.token);
+  const serial = getInputValue($dom.serial);
+
+  if (!host) {
+    showStatus('Please enter Host', 'error');
+    return;
+  }
+  if (!token) {
+    showStatus('Please enter Token', 'error');
+    return;
+  }
+  if (!serial) {
+    showStatus('Please enter Serial', 'error');
+    return;
+  }
+
+  showStatus('Testing connection...', 'info');
+  disableTestButton();
+
+  if (!isWebSocketConnected()) {
+    showStatus('Not connected to StreamDock', 'error');
+    enableTestButton();
+    return;
+  }
+
+  sendToPlugin({ event: 'testConnection', host, token, serial });
+
+  setTimeout(() => {
+    const testButton = /** @type {HTMLButtonElement|null} */ ($dom.testButton);
+    if (testButton?.disabled) {
+      showStatus('Connection timeout', 'error');
+      enableTestButton();
+    }
+  }, 15000);
+}
+
+/**
+ * Refresh device list
+ */
+function refreshDevices() {
+  const host = getInputValue($dom.host);
+  const token = getInputValue($dom.token);
+  const serial = getInputValue($dom.serial);
+
+  if (!host || !token || !serial) {
+    showStatus('Please fill in connection settings', 'error');
+    return;
+  }
+
+  if (!isWebSocketConnected()) {
+    showStatus('Not connected to StreamDock', 'error');
+    return;
+  }
+
+  showStatus('Refreshing devices...', 'info');
+  sendToPlugin({ event: 'getDevices', host, token, serial });
 }
 
 // ============================================================
@@ -818,6 +325,583 @@ function saveGlobalSettings() {
 
     globalSettings = { host, token, serial };
     updateConnectionStatus(false, host);
+  }
+}
+
+/**
+ * Get current connection settings
+ * @returns {GlobalSettings}
+ */
+function getConnectionSettings() {
+  return {
+    host: globalSettings.host || getInputValue($dom.host),
+    token: globalSettings.token || getInputValue($dom.token),
+    serial: globalSettings.serial || getInputValue($dom.serial),
+  };
+}
+
+// ============================================================
+// Settings Loading
+// ============================================================
+
+/**
+ * Load connection settings into UI
+ * @param {GlobalSettings|Record<string, unknown>} settings
+ */
+function loadConnectionSettings(settings) {
+  const host = /** @type {HTMLInputElement|null} */ ($dom.host);
+  const token = /** @type {HTMLInputElement|null} */ ($dom.token);
+  const serial = /** @type {HTMLInputElement|null} */ ($dom.serial);
+
+  if (settings.host !== undefined && host) {
+    host.value = /** @type {string} */ (settings.host);
+  }
+  if (settings.token !== undefined && token) {
+    token.value = /** @type {string} */ (settings.token);
+  }
+  if (settings.serial !== undefined && serial) {
+    serial.value = /** @type {string} */ (settings.serial);
+  }
+}
+
+/**
+ * Load device selection settings into UI
+ * @param {Record<string, unknown>} settings
+ */
+function loadDeviceSettings(settings) {
+  const roomSelect = /** @type {HTMLSelectElement|null} */ ($dom.roomSelect);
+  const deviceSelect = /** @type {HTMLSelectElement|null} */ ($dom.deviceSelect);
+  const customName = /** @type {HTMLInputElement|null} */ ($dom.customName);
+  const actionSelect = /** @type {HTMLSelectElement|null} */ ($dom.actionSelect);
+
+  if (settings.roomId !== undefined && roomSelect) {
+    roomSelect.value = String(settings.roomId);
+  }
+  if (settings.accessoryId !== undefined && deviceSelect) {
+    deviceSelect.value = String(settings.accessoryId);
+  }
+  if (settings.customName !== undefined && customName) {
+    customName.value = String(settings.customName);
+  }
+  if (settings.action !== undefined && actionSelect) {
+    actionSelect.value = String(settings.action);
+  }
+
+  if (deviceConfig?.loadExtraSettings) {
+    deviceConfig.loadExtraSettings();
+  }
+}
+
+// ============================================================
+// Settings Saving
+// ============================================================
+
+/**
+ * Save settings (connection-only mode)
+ */
+function saveConnectionOnlySettings() {
+  if (typeof $settings === 'undefined' || !$settings) return;
+
+  $settings.host = globalSettings.host || getInputValue($dom.host);
+  $settings.token = globalSettings.token || getInputValue($dom.token);
+  $settings.serial = globalSettings.serial || getInputValue($dom.serial);
+
+  const customName = /** @type {HTMLInputElement|null} */ ($dom.customName);
+  if (customName) {
+    $settings.customName = customName.value?.trim() || '';
+  }
+}
+
+/**
+ * Save settings (with device selection)
+ */
+function saveSettings() {
+  if (typeof $settings === 'undefined' || !$settings) return;
+
+  // Connection settings
+  $settings.host = globalSettings.host || getInputValue($dom.host);
+  $settings.token = globalSettings.token || getInputValue($dom.token);
+  $settings.serial = globalSettings.serial || getInputValue($dom.serial);
+
+  // Common settings
+  const customName = /** @type {HTMLInputElement|null} */ ($dom.customName);
+  const actionSelect = /** @type {HTMLSelectElement|null} */ ($dom.actionSelect);
+
+  $settings.customName = customName?.value?.trim() || '';
+  $settings.action = actionSelect?.value || deviceConfig?.defaultAction || 'toggle';
+
+  if (deviceConfig?.saveExtraSettings) {
+    deviceConfig.saveExtraSettings();
+  }
+
+  sendSettingsToPlugin();
+}
+
+/**
+ * Send settings to plugin
+ */
+function sendSettingsToPlugin() {
+  if (!isWebSocketConnected() || !deviceConfig) return;
+  if (typeof $settings === 'undefined' || !$settings) return;
+
+  /** @type {Record<string, unknown>} */
+  const payload = {
+    host: globalSettings.host || '',
+    token: globalSettings.token || '',
+    serial: globalSettings.serial || '',
+    accessoryId: $settings.accessoryId,
+    accessoryName: $settings.accessoryName,
+    serviceId: $settings.serviceId,
+    serviceName: $settings.serviceName,
+    customName: $settings.customName,
+    action: $settings.action,
+  };
+
+  const charIdKeys = [
+    'characteristicId',
+    'currentPositionCharId',
+    'targetPositionCharId',
+    'currentStateCharId',
+    'currentTempCharId',
+    'targetTempCharId',
+    'currentModeCharId',
+    'targetModeCharId',
+    'valueCharId',
+    'brightnessStep',
+  ];
+
+  charIdKeys.forEach((key) => {
+    if ($settings[key] !== undefined) {
+      payload[key] = $settings[key];
+    }
+  });
+
+  if (deviceConfig.getExtraPluginSettings) {
+    Object.assign(payload, deviceConfig.getExtraPluginSettings());
+  }
+
+  sendToPlugin(payload);
+}
+
+// ============================================================
+// Device Population
+// ============================================================
+
+/**
+ * Populate rooms dropdown
+ */
+function populateRooms() {
+  const select = /** @type {HTMLSelectElement|null} */ ($dom.roomSelect);
+  if (!select) return;
+
+  const currentValue = select.value;
+  const savedRoomId =
+    typeof $settings !== 'undefined' && $settings?.roomId ? String($settings.roomId) : '';
+
+  select.innerHTML = '<option value="">-- All Rooms --</option>';
+
+  rooms.forEach((room) => {
+    const option = document.createElement('option');
+    option.value = String(room.id);
+    option.textContent = room.name;
+    select.appendChild(option);
+  });
+
+  if (currentValue) {
+    select.value = currentValue;
+  } else if (savedRoomId) {
+    select.value = savedRoomId;
+  }
+
+  populateDevices();
+}
+
+/**
+ * Populate devices dropdown
+ */
+function populateDevices() {
+  const select = /** @type {HTMLSelectElement|null} */ ($dom.deviceSelect);
+  if (!select) return;
+
+  const roomSelect = /** @type {HTMLSelectElement|null} */ ($dom.roomSelect);
+  const roomId = roomSelect?.value;
+  const currentValue = select.value;
+
+  select.innerHTML = '<option value="">-- Select Device --</option>';
+  hideServiceSelect();
+
+  if (devices.length === 0) {
+    const option = document.createElement('option');
+    option.value = '';
+    option.textContent = 'No devices found';
+    option.disabled = true;
+    select.appendChild(option);
+    return;
+  }
+
+  const filteredDevices = roomId ? devices.filter((d) => d.roomId === parseInt(roomId)) : devices;
+
+  filteredDevices.forEach((device) => {
+    const option = document.createElement('option');
+    option.value = String(device.id);
+    option.textContent = device.name;
+    select.appendChild(option);
+  });
+
+  let restored = false;
+  if (currentValue && filteredDevices.some((d) => d.id === parseInt(currentValue))) {
+    select.value = currentValue;
+    restored = true;
+  } else if (typeof $settings !== 'undefined' && $settings && $settings.accessoryId) {
+    const accessoryId = String($settings.accessoryId);
+    if (filteredDevices.some((d) => d.id === parseInt(accessoryId))) {
+      select.value = accessoryId;
+      restored = true;
+    }
+  }
+
+  if (restored) {
+    populateServices();
+  }
+}
+
+/**
+ * Filter devices when room changes
+ */
+function filterDevices() {
+  const roomSelect = /** @type {HTMLSelectElement|null} */ ($dom.roomSelect);
+  const roomId = roomSelect?.value;
+  if (typeof $settings !== 'undefined' && $settings) {
+    $settings.roomId = roomId ? parseInt(roomId) : undefined;
+  }
+  populateDevices();
+}
+
+// ============================================================
+// Service Population
+// ============================================================
+
+function hideServiceSelect() {
+  if ($dom.serviceSelectRow) {
+    $dom.serviceSelectRow.style.display = 'none';
+  }
+}
+
+function showServiceSelect() {
+  if ($dom.serviceSelectRow) {
+    $dom.serviceSelectRow.style.display = '';
+  }
+}
+
+/**
+ * Populate services dropdown
+ */
+function populateServices() {
+  if (!deviceConfig) return;
+
+  const deviceSelect = /** @type {HTMLSelectElement|null} */ ($dom.deviceSelect);
+  const accessoryId = deviceSelect?.value;
+  if (!accessoryId) {
+    hideServiceSelect();
+    return;
+  }
+
+  const accessory = devices.find((d) => d.id === parseInt(accessoryId));
+  if (!accessory) {
+    hideServiceSelect();
+    return;
+  }
+
+  const matchingServices = accessory.services?.filter(deviceConfig.isServiceFn) || [];
+
+  if (matchingServices.length === 0) {
+    hideServiceSelect();
+    return;
+  }
+
+  if (matchingServices.length === 1) {
+    hideServiceSelect();
+    selectServiceById(matchingServices[0].sId);
+    return;
+  }
+
+  showServiceSelect();
+
+  const select = /** @type {HTMLSelectElement|null} */ ($dom.serviceSelect);
+  if (!select) return;
+
+  select.innerHTML = `<option value="">-- Select ${deviceConfig.serviceLabel} --</option>`;
+
+  matchingServices.forEach((service) => {
+    const option = document.createElement('option');
+    option.value = String(service.sId);
+    option.textContent = service.name || `${deviceConfig.serviceLabel} ${service.sId}`;
+    select.appendChild(option);
+  });
+
+  if (typeof $settings !== 'undefined' && $settings && $settings.serviceId) {
+    const savedServiceId = String($settings.serviceId);
+    if (matchingServices.some((s) => s.sId === parseInt(savedServiceId))) {
+      select.value = savedServiceId;
+    }
+  }
+}
+
+// ============================================================
+// Selection Handlers
+// ============================================================
+
+/**
+ * Called when accessory is selected
+ */
+function selectAccessory() {
+  const deviceSelect = /** @type {HTMLSelectElement|null} */ ($dom.deviceSelect);
+  const serviceSelect = /** @type {HTMLSelectElement|null} */ ($dom.serviceSelect);
+  const accessoryId = deviceSelect?.value;
+
+  if (serviceSelect) {
+    serviceSelect.value = '';
+  }
+
+  if (!accessoryId) {
+    hideServiceSelect();
+    if (typeof $settings !== 'undefined' && $settings) {
+      $settings.accessoryId = undefined;
+      $settings.accessoryName = undefined;
+      $settings.serviceId = undefined;
+      $settings.serviceName = undefined;
+    }
+    if (deviceConfig?.onAccessorySelected) {
+      deviceConfig.onAccessorySelected(null, []);
+    }
+    saveSettings();
+    return;
+  }
+
+  const accessory = devices.find((d) => d.id === parseInt(accessoryId));
+  if (!accessory) return;
+
+  if (typeof $settings !== 'undefined' && $settings) {
+    $settings.accessoryId = accessory.id;
+    $settings.accessoryName = accessory.name;
+  }
+
+  if (deviceConfig?.onAccessorySelected) {
+    const matchingServices = accessory.services?.filter(deviceConfig.isServiceFn) || [];
+    deviceConfig.onAccessorySelected(accessory, matchingServices);
+  }
+
+  populateServices();
+}
+
+/**
+ * Called when service is selected from dropdown
+ */
+function selectService() {
+  const serviceSelect = /** @type {HTMLSelectElement|null} */ ($dom.serviceSelect);
+  const serviceId = serviceSelect?.value;
+  if (!serviceId) return;
+  selectServiceById(parseInt(serviceId));
+}
+
+/**
+ * Select service by ID and save settings
+ * @param {number} serviceId
+ */
+function selectServiceById(serviceId) {
+  if (!deviceConfig) return;
+
+  const deviceSelect = /** @type {HTMLSelectElement|null} */ ($dom.deviceSelect);
+  const accessoryId = deviceSelect?.value;
+  if (!accessoryId) return;
+
+  const accessory = devices.find((d) => d.id === parseInt(accessoryId));
+  if (!accessory) return;
+
+  const service = accessory.services?.find((s) => s.sId === serviceId);
+  if (!service) return;
+
+  const charIds = deviceConfig.findCharacteristicsFn(service);
+
+  if (typeof $settings !== 'undefined' && $settings) {
+    $settings.serviceId = service.sId;
+    $settings.serviceName = service.name;
+
+    Object.entries(charIds).forEach(([key, value]) => {
+      $settings[key] = value;
+    });
+  }
+
+  saveSettings();
+}
+
+// ============================================================
+// Event Handlers
+// ============================================================
+
+/**
+ * Handle didReceiveSettings (connection-only)
+ * @param {{settings: Record<string, unknown>}} data
+ */
+function handleDidReceiveSettingsConnection(data) {
+  loadConnectionSettings(data.settings || {});
+  requestGlobalSettings();
+}
+
+/**
+ * Handle didReceiveSettings (with device selection)
+ * @param {{settings: Record<string, unknown>}} data
+ */
+function handleDidReceiveSettingsWithDevices(data) {
+  const settings = data.settings || {};
+  loadConnectionSettings(settings);
+  loadDeviceSettings(settings);
+  requestGlobalSettings();
+}
+
+/**
+ * Handle didReceiveGlobalSettings (connection-only)
+ * @param {{settings: GlobalSettings}} data
+ */
+function handleDidReceiveGlobalSettingsConnection(data) {
+  globalSettings = data.settings || {};
+  loadConnectionSettings(globalSettings);
+
+  if (typeof $settings !== 'undefined' && $settings) {
+    if (globalSettings.host) $settings.host = globalSettings.host;
+    if (globalSettings.token) $settings.token = globalSettings.token;
+    if (globalSettings.serial) $settings.serial = globalSettings.serial;
+  }
+
+  const hasCredentials = globalSettings.host && globalSettings.token && globalSettings.serial;
+  updateConnectionStatus(hasCredentials, globalSettings.host);
+}
+
+/**
+ * Handle didReceiveGlobalSettings (with device selection)
+ * @param {{settings: GlobalSettings}} data
+ */
+function handleDidReceiveGlobalSettingsWithDevices(data) {
+  globalSettings = data.settings || {};
+  loadConnectionSettings(globalSettings);
+
+  if (typeof $settings !== 'undefined' && $settings) {
+    if (globalSettings.host) $settings.host = globalSettings.host;
+    if (globalSettings.token) $settings.token = globalSettings.token;
+    if (globalSettings.serial) $settings.serial = globalSettings.serial;
+  }
+
+  const hasCredentials = globalSettings.host && globalSettings.token && globalSettings.serial;
+
+  if (devicesLoaded && hasCredentials) {
+    updateConnectionStatus(true, globalSettings.host);
+  } else if (!hasCredentials) {
+    updateConnectionStatus(false);
+  }
+
+  if (!devicesLoaded && hasCredentials) {
+    sendToPlugin({
+      event: 'getDevices',
+      host: globalSettings.host,
+      token: globalSettings.token,
+      serial: globalSettings.serial,
+    });
+  }
+}
+
+/**
+ * Handle sendToPropertyInspector (connection-only)
+ * @param {Record<string, unknown>} data
+ */
+function handleSendToPIConnection(data) {
+  if (!data) return;
+
+  // Custom handler first
+  if (customSendToPIHandler && customSendToPIHandler(data)) {
+    return;
+  }
+
+  switch (data.event) {
+    case 'testResult':
+      if (data.success) {
+        showStatus('Connection successful!', 'success');
+        saveGlobalSettings();
+        updateConnectionStatus(true, getInputValue($dom.host));
+        if (connectionSettingsVisible) {
+          toggleConnectionSettings();
+        }
+      } else {
+        showStatus('Error: ' + (data.error || 'Unknown error'), 'error');
+        updateConnectionStatus(false);
+      }
+      enableTestButton();
+      break;
+
+    case 'connectionStatus':
+      if (data.status === 'success') {
+        showStatus(/** @type {string} */ (data.message) || 'Connected', 'success');
+        updateConnectionStatus(true, getInputValue($dom.host));
+        if (connectionSettingsVisible) {
+          toggleConnectionSettings();
+        }
+      } else if (data.status === 'error') {
+        showStatus(/** @type {string} */ (data.message) || 'Connection failed', 'error');
+      } else if (data.status === 'connecting') {
+        showStatus('Connecting...', 'info');
+      }
+      break;
+
+    case 'error':
+      showStatus('Error: ' + (data.message || 'Unknown error'), 'error');
+      break;
+  }
+}
+
+/**
+ * Handle sendToPropertyInspector (with device selection)
+ * @param {Record<string, unknown>} data
+ */
+function handleSendToPIWithDevices(data) {
+  if (!data) return;
+
+  // Custom handler first
+  if (customSendToPIHandler && customSendToPIHandler(data)) {
+    return;
+  }
+
+  switch (data.event) {
+    case 'deviceList':
+      rooms = /** @type {PIRoom[]} */ (data.rooms) || [];
+      devices = /** @type {PIAccessory[]} */ (data.devices || data.lights) || [];
+      devicesLoaded = true;
+      populateRooms();
+      populateDevices();
+      updateConnectionStatus(true, globalSettings.host || getInputValue($dom.host));
+      break;
+
+    case 'testResult':
+      if (data.success) {
+        showStatus('Connection successful!', 'success');
+        rooms = /** @type {PIRoom[]} */ (data.rooms) || [];
+        devices = /** @type {PIAccessory[]} */ (data.devices || data.lights) || [];
+        devicesLoaded = true;
+        populateRooms();
+        populateDevices();
+        saveGlobalSettings();
+        updateConnectionStatus(true, getInputValue($dom.host));
+        if (connectionSettingsVisible) {
+          toggleConnectionSettings();
+        }
+      } else {
+        showStatus('Error: ' + (data.error || 'Unknown error'), 'error');
+        updateConnectionStatus(false);
+      }
+      enableTestButton();
+      break;
+
+    case 'error':
+      showStatus('Error: ' + (data.message || 'Unknown error'), 'error');
+      break;
   }
 }
 
@@ -873,9 +957,6 @@ function showStatus(message, type) {
   }
 }
 
-/**
- * Disable test button
- */
 function disableTestButton() {
   const button = /** @type {HTMLButtonElement|null} */ ($dom.testButton);
   if (button) {
@@ -884,9 +965,6 @@ function disableTestButton() {
   }
 }
 
-/**
- * Enable test button
- */
 function enableTestButton() {
   const button = /** @type {HTMLButtonElement|null} */ ($dom.testButton);
   if (button) {
@@ -900,7 +978,7 @@ function enableTestButton() {
 // ============================================================
 
 /**
- * Get characteristic type (handles both c.type and c.control.type)
+ * Get characteristic type
  * @param {PICharacteristic} c
  * @returns {string|number|undefined}
  */
@@ -941,150 +1019,56 @@ function findOnCharacteristic(service) {
 }
 
 // ============================================================
-// Connection-Only Initialization (for PIs without device selection)
+// Public API: Initialization Functions
 // ============================================================
 
 /**
- * Initialize DOM for connection-only PI
+ * Initialize connection settings only (no device selection)
+ * @param {{onSendToPropertyInspector?: SendToPIHandler}} [options]
+ * @returns {{ $propEvent: object }}
  */
-function initConnectionOnlyDom() {
-  // Inject connection settings HTML if container exists
-  const container = document.getElementById('connectionSettingsContainer');
-  if (container) {
-    container.innerHTML = renderConnectionSettings();
-  }
-
-  $dom.main = document.querySelector('.sdpi-wrapper');
-  $dom.connectionBtn = document.getElementById('connectionBtn');
-  $dom.connectionStatusText = document.getElementById('connectionStatusText');
-  $dom.connectionSettings = document.getElementById('connectionSettings');
-  $dom.host = document.getElementById('host');
-  $dom.token = document.getElementById('token');
-  $dom.serial = document.getElementById('serial');
-  $dom.testButton = document.getElementById('testButton');
-  $dom.statusMessage = document.getElementById('statusMessage');
-}
-
-/**
- * Callback for custom sendToPropertyInspector handling
- * @callback CustomSendToPI
- * @param {Record<string, unknown>} data
- * @returns {boolean} - true if handled, false to use default handling
- */
-
-/**
- * Initialize connection-only Property Inspector (no device selection)
- * @param {{onSendToPropertyInspector?: CustomSendToPI}} [options]
- * @returns {{ $propEvent: object, getConnectionSettings: () => GlobalSettings }}
- */
-function initConnectionOnly(options = {}) {
-  initConnectionOnlyDom();
-
-  /**
-   * Handle sendToPropertyInspector for connection-only PI
-   * @param {Record<string, unknown>} data
-   */
-  function connectionOnlySendToPI(data) {
-    if (!data) return;
-
-    // Allow custom handler first
-    if (options.onSendToPropertyInspector && options.onSendToPropertyInspector(data)) {
-      return;
-    }
-
-    // Default handling for connection events
-    switch (data.event) {
-      case 'testResult':
-        if (data.success) {
-          showStatus('Connection successful!', 'success');
-          saveGlobalSettings();
-          updateConnectionStatus(true, getInputValue($dom.host));
-          if (connectionSettingsVisible) {
-            toggleConnectionSettings();
-          }
-        } else {
-          showStatus('Error: ' + (data.error || 'Unknown error'), 'error');
-          updateConnectionStatus(false);
-        }
-        enableTestButton();
-        break;
-
-      case 'connectionStatus':
-        if (data.status === 'success') {
-          showStatus(/** @type {string} */ (data.message) || 'Connected', 'success');
-          updateConnectionStatus(true, getInputValue($dom.host));
-          if (connectionSettingsVisible) {
-            toggleConnectionSettings();
-          }
-        } else if (data.status === 'error') {
-          showStatus(/** @type {string} */ (data.message) || 'Connection failed', 'error');
-        } else if (data.status === 'connecting') {
-          showStatus('Connecting...', 'info');
-        }
-        break;
-
-      case 'error':
-        showStatus('Error: ' + (data.message || 'Unknown error'), 'error');
-        break;
-    }
-  }
-
-  /**
-   * Handle didReceiveSettings for connection-only PI
-   * @param {{settings: Record<string, unknown>}} data
-   */
-  function connectionOnlyDidReceiveSettings(data) {
-    const settings = data.settings || {};
-    loadConnectionSettings(settings);
-    requestGlobalSettings();
-  }
-
-  /**
-   * Handle didReceiveGlobalSettings for connection-only PI
-   * @param {{settings: GlobalSettings}} data
-   */
-  function connectionOnlyDidReceiveGlobalSettings(data) {
-    globalSettings = data.settings || {};
-    loadConnectionSettings(globalSettings);
-
-    // Sync global connection settings to local
-    if (typeof $settings !== 'undefined' && $settings) {
-      if (globalSettings.host) $settings.host = globalSettings.host;
-      if (globalSettings.token) $settings.token = globalSettings.token;
-      if (globalSettings.serial) $settings.serial = globalSettings.serial;
-    }
-
-    const hasCredentials = globalSettings.host && globalSettings.token && globalSettings.serial;
-    if (hasCredentials) {
-      updateConnectionStatus(true, globalSettings.host);
-    } else {
-      updateConnectionStatus(false);
-    }
-  }
+function initConnection(options = {}) {
+  initConnectionDom();
+  customSendToPIHandler = options.onSendToPropertyInspector || null;
 
   return {
     $propEvent: {
-      didReceiveSettings: connectionOnlyDidReceiveSettings,
-      sendToPropertyInspector: connectionOnlySendToPI,
-      didReceiveGlobalSettings: connectionOnlyDidReceiveGlobalSettings,
+      didReceiveSettings: handleDidReceiveSettingsConnection,
+      sendToPropertyInspector: handleSendToPIConnection,
+      didReceiveGlobalSettings: handleDidReceiveGlobalSettingsConnection,
     },
-    getConnectionSettings: () => ({
-      host: globalSettings.host || getInputValue($dom.host),
-      token: globalSettings.token || getInputValue($dom.token),
-      serial: globalSettings.serial || getInputValue($dom.serial),
-    }),
+  };
+}
+
+/**
+ * Initialize with device selection (full PI)
+ * @param {DeviceSelectionConfig} config
+ * @returns {{ $propEvent: object }}
+ */
+function initDeviceSelection(config) {
+  deviceConfig = config;
+  initConnectionDom();
+  initDeviceSelectionDom(config.deviceSelectId);
+
+  return {
+    $propEvent: {
+      didReceiveSettings: handleDidReceiveSettingsWithDevices,
+      sendToPropertyInspector: handleSendToPIWithDevices,
+      didReceiveGlobalSettings: handleDidReceiveGlobalSettingsWithDevices,
+    },
   };
 }
 
 // ============================================================
-// Exports (for browser global scope)
+// Exports
 // ============================================================
 
-// These are exposed globally for the PI to use
 window.SprutHubPI = {
-  init: initPI,
-  initConnectionOnly,
-  // Event handlers (called by HTML onclick)
+  // Initialization
+  initConnection,
+  initDeviceSelection,
+
+  // Event handlers (HTML onclick)
   selectAccessory,
   selectService,
   filterDevices,
@@ -1092,24 +1076,24 @@ window.SprutHubPI = {
   refreshDevices,
   toggleConnectionSettings,
   saveSettings,
-  // Helpers for characteristic finding
+
+  // Helpers
   getCharType,
   isBooleanCharacteristic,
   findOnCharacteristic,
-  // Access to DOM cache
+  getConnectionSettings,
+
+  // Accessors
   get $dom() {
     return $dom;
   },
-  // Access to settings
   get $settings() {
     return typeof $settings !== 'undefined' ? $settings : null;
   },
-  // Access to devices list
   get devices() {
     return devices;
   },
-  // Access to PI config
   get config() {
-    return piConfig;
+    return deviceConfig;
   },
 };

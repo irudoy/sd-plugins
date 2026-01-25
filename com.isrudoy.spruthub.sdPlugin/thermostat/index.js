@@ -97,7 +97,7 @@ function getExtraPluginSettings() {
 }
 
 // Initialize PI with configuration
-const $propEvent = SprutHubPI.init({
+const $propEvent = SprutHubPI.initDeviceSelection({
   deviceSelectId: 'deviceSelect',
   serviceLabel: 'Thermostat',
   isServiceFn: isThermostatService,

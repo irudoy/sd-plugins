@@ -71,7 +71,7 @@ function findCharacteristics(service) {
 }
 
 // Initialize PI with configuration
-const $propEvent = SprutHubPI.init({
+const $propEvent = SprutHubPI.initDeviceSelection({
   deviceSelectId: 'deviceSelect',
   serviceLabel: 'Sensor',
   isServiceFn: isSensorService,

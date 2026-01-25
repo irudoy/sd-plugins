@@ -8,7 +8,7 @@ Monorepo for StreamDock plugins (macOS).
 |--------|-----|-------------|
 | mactools | `com.isrudoy.mactools` | Drive Info, Battery Monitor, Run Script |
 | unifi | `com.isrudoy.unifi` | VPN Status - Unifi Network VPN client |
-| spruthub | `com.isrudoy.spruthub` | Sprut.Hub smart home control (8 device types) |
+| spruthub | `com.isrudoy.spruthub` | Sprut.Hub smart home control (9 actions) |
 
 **Architecture:** Node.js backend + HTML/JS Property Inspector
 **SDK:** StreamDock SDK (NOT Elgato Stream Deck SDK)
@@ -48,8 +48,8 @@ sd-plugins/
     ├── plugin/               # Node.js backend
     │   ├── index.js          # Entry point, event routing
     │   ├── lib/              # Shared modules
-    │   └── actions/          # Device actions (8 types)
-    ├── light/                # Property Inspectors (one per device type)
+    │   └── actions/          # Device actions (9 types)
+    ├── light/                # Property Inspectors (one per action)
     ├── switch/
     ├── outlet/
     ├── lock/
@@ -57,6 +57,7 @@ sd-plugins/
     ├── thermostat/
     ├── sensor/
     ├── button/
+    ├── scenario/
     └── static/               # SDK (not linted)
 ```
 
@@ -159,6 +160,7 @@ Smart home control via Sprut.Hub controller (HomeKit-compatible).
 | Thermostat | `com.isrudoy.spruthub.thermostat` | Climate control with temperature, dial rotation |
 | Sensor | `com.isrudoy.spruthub.sensor` | Read-only sensors (temp, humidity, motion, contact) |
 | Button | `com.isrudoy.spruthub.button` | Trigger button events (single/double/long press) |
+| Scenario | `com.isrudoy.spruthub.scenario` | Run Sprut.Hub automation scenarios |
 
 ### Module Structure
 
@@ -180,13 +182,14 @@ plugin/
     ├── cover.js          # Cover (position 0-100%, dial)
     ├── thermostat.js     # Thermostat (temp, mode, dial)
     ├── sensor.js         # Sensors (temp, humidity, motion, contact)
-    └── button.js         # Button (single/double/long press)
+    ├── button.js         # Button (single/double/long press)
+    └── scenario.js       # Scenario (run automation)
 
 pi-lib/                   # Shared Property Inspector code
-├── common.js             # SprutHubPI class, connection settings, device selection
+├── common.js             # SprutHubPI: initConnection, initDeviceSelection
 └── styles.css            # Common PI styles (status messages, connection panel)
 
-{device}/index.html       # PI for each device type (light, switch, etc.)
+{device}/index.html       # PI for each action type (light, switch, scenario, etc.)
 ```
 
 ### BaseAction Pattern (base-action.js)
@@ -363,13 +366,41 @@ const $propEvent = {
 
 ### Spruthub PI Architecture (pi-lib/)
 
-Shared code for all 8 Property Inspectors:
+Shared code for all Property Inspectors with composable initialization:
 
-**pi-lib/common.js** — `SprutHubPI` class:
-- `initDom()` — injects Connection Settings HTML into `#connectionSettingsContainer`
-- `renderConnectionSettings()` — generates connection panel HTML
-- `testConnection()`, `populateDeviceDropdown()`, `updateServiceDropdown()`
-- Device/service selection logic
+**pi-lib/common.js** — `SprutHubPI` module:
+
+Two initialization functions:
+- `initConnection(options)` — connection settings only (for scenario PI)
+- `initDeviceSelection(config)` — full PI with device/service selection
+
+```javascript
+// Connection-only PI (scenario)
+const piInit = SprutHubPI.initConnection({
+  onSendToPropertyInspector: handleSendToPI,  // custom event handler
+});
+const $propEvent = piInit.$propEvent;
+
+// Device selection PI (light, switch, etc.)
+const $propEvent = SprutHubPI.initDeviceSelection({
+  deviceSelectId: 'deviceSelect',
+  serviceLabel: 'Switch',
+  isServiceFn: isSwitchService,
+  findCharacteristicsFn: findCharacteristics,
+  defaultAction: 'toggle',
+  loadExtraSettings,      // optional
+  saveExtraSettings,      // optional
+  getExtraPluginSettings, // optional
+  onAccessorySelected,    // optional
+}).$propEvent;
+```
+
+**Helper functions:**
+- `SprutHubPI.getConnectionSettings()` — returns `{host, token, serial}`
+- `SprutHubPI.testConnection()` — test connection button handler
+- `SprutHubPI.saveSettings()` — save and send settings to plugin
+- `SprutHubPI.findOnCharacteristic(service)` — find On characteristic
+- `SprutHubPI.getCharType(characteristic)` — get characteristic type
 
 **pi-lib/styles.css** — common styles:
 - `.status-message`, `.status-success`, `.status-error`, `.status-info`
@@ -381,7 +412,7 @@ Shared code for all 8 Property Inspectors:
 <link rel="stylesheet" href="../pi-lib/styles.css">
 <script src="../pi-lib/common.js"></script>
 ...
-<div id="connectionSettingsContainer"></div>  <!-- Injected by initDom() -->
+<div id="connectionSettingsContainer"></div>  <!-- Injected by init -->
 <div class="sdpi-item">
   <div class="sdpi-item-label">Device</div>
   <select id="deviceSelect">...</select>
