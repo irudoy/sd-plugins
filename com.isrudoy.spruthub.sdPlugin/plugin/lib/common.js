@@ -45,6 +45,8 @@ const LOCK_ACTION = 'com.isrudoy.spruthub.lock';
 const SENSOR_ACTION = 'com.isrudoy.spruthub.sensor';
 /** @type {string} */
 const BUTTON_ACTION = 'com.isrudoy.spruthub.button';
+/** @type {string} */
+const SCENARIO_ACTION = 'com.isrudoy.spruthub.scenario';
 
 // Canvas dimensions
 /** @type {number} */
@@ -127,6 +129,7 @@ module.exports = {
   LOCK_ACTION,
   SENSOR_ACTION,
   BUTTON_ACTION,
+  SCENARIO_ACTION,
   CANVAS_SIZE,
   CANVAS_CENTER,
   LAYOUT,

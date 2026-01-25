@@ -91,6 +91,12 @@ npm run restart                                              # Restart StreamDoc
 cat com.isrudoy.mactools.sdPlugin/plugin/plugin.log         # Logs (if DEBUG=true)
 ```
 
+### Debugging
+Plugins can be inspected using Chrome DevTools:
+- Open `chrome://inspect` in Chrome/Chromium browser
+- Or navigate directly to `http://localhost:23519/`
+- Click "inspect" next to the plugin process to open DevTools
+
 ## mactools (com.isrudoy.mactools)
 
 ### Actions

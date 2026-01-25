@@ -100,6 +100,25 @@ const { log, REQUEST_TIMEOUT, MAX_RECONNECT_ATTEMPTS } = require('./common');
  * @property {SprutHubAccessory[]} [accessory.accessories]
  */
 
+/**
+ * @typedef {Object} SprutHubScenario
+ * @property {string} index - Scenario ID (used for running)
+ * @property {string} name - Scenario display name
+ * @property {string} [desc] - Description
+ * @property {string} type - Type: "LOGIC", "GLOBAL", "BLOCK", etc.
+ * @property {boolean} predefined - Is system/predefined scenario
+ * @property {boolean} active - Is enabled
+ * @property {boolean} [onStart] - Runs on startup
+ * @property {number} [order] - Sort order
+ */
+
+/**
+ * @typedef {Object} ScenarioListResponse
+ * @property {Object} [scenario]
+ * @property {Object} [scenario.list]
+ * @property {SprutHubScenario[]} [scenario.list.scenarios]
+ */
+
 // ============================================================
 // SprutHub Class
 // ============================================================
@@ -1053,6 +1072,51 @@ class SprutHub {
     return accessories
       .map(SprutHub.accessoryToLight)
       .filter(/** @type {(l: SprutHubLight|null) => l is SprutHubLight} */ (l) => l !== null);
+  }
+
+  /**
+   * Get list of scenarios
+   * @param {boolean} [includeInactive=false] - Include inactive scenarios
+   * @param {boolean} [includePredefined=false] - Include predefined/system scenarios
+   * @returns {Promise<SprutHubScenario[]>}
+   */
+  async getScenarios(includeInactive = false, includePredefined = false) {
+    log('[SprutHub] Requesting scenario list...');
+    const result = /** @type {ScenarioListResponse} */ (
+      await this.send({
+        scenario: {
+          list: {},
+        },
+      })
+    );
+    let scenarios = result?.scenario?.list?.scenarios || [];
+
+    // Filter out inactive scenarios unless requested
+    if (!includeInactive) {
+      scenarios = scenarios.filter((s) => s.active);
+    }
+
+    // Filter out predefined/system scenarios unless requested
+    if (!includePredefined) {
+      scenarios = scenarios.filter((s) => !s.predefined);
+    }
+
+    log('[SprutHub] Got scenarios:', scenarios.length);
+    return scenarios;
+  }
+
+  /**
+   * Run a scenario by index
+   * @param {string} index - Scenario index/ID
+   * @returns {Promise<unknown>}
+   */
+  async runScenario(index) {
+    log('[SprutHub] Running scenario:', index);
+    return this.send({
+      scenario: {
+        run: { index },
+      },
+    });
   }
 
   /**

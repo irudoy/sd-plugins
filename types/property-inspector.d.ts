@@ -32,6 +32,11 @@ declare var $action: string;
 declare var $context: string;
 
 /**
+ * Controller type: 'Keypad' for buttons, 'Encoder' or 'Knob' for dials/knobs
+ */
+declare var $controller: string;
+
+/**
  * Settings proxy - auto-saves on property assignment
  */
 declare var $settings: Record<string, unknown> | undefined;
@@ -197,3 +202,148 @@ interface DOMCache {
   main: DOMElementWithMethods;
   [key: string]: DOMElementWithMethods | null;
 }
+
+// ============================================================================
+// Sprut.Hub Property Inspector Types (from pi-lib/common.js)
+// ============================================================================
+
+/**
+ * Room object from Sprut.Hub API
+ */
+interface PIRoom {
+  id: number;
+  name: string;
+}
+
+/**
+ * Characteristic control object
+ */
+interface PICharacteristicControl {
+  value?: unknown;
+  type?: string | number;
+}
+
+/**
+ * Characteristic object from Sprut.Hub API
+ */
+interface PICharacteristic {
+  cId: number;
+  type: number | string;
+  control?: PICharacteristicControl;
+}
+
+/**
+ * Service object from Sprut.Hub API
+ */
+interface PIService {
+  sId: number;
+  name?: string;
+  type: number | string;
+  characteristics?: PICharacteristic[];
+}
+
+/**
+ * Accessory object from Sprut.Hub API
+ */
+interface PIAccessory {
+  id: number;
+  name: string;
+  roomId?: number;
+  services?: PIService[];
+}
+
+/**
+ * Configuration for SprutHubPI.init()
+ */
+interface PIConfig {
+  deviceSelectId: string;
+  serviceLabel: string;
+  isServiceFn: (service: PIService) => boolean;
+  findCharacteristicsFn: (service: PIService) => Record<string, number | undefined>;
+  defaultAction: string;
+  loadExtraSettings?: () => void;
+  saveExtraSettings?: () => void;
+  getExtraPluginSettings?: () => Record<string, unknown>;
+}
+
+/**
+ * Result of SprutHubPI.init()
+ */
+interface PIInitResult {
+  $propEvent: PropEventHandlers;
+}
+
+/**
+ * SprutHubPI global object (from pi-lib/common.js)
+ */
+interface SprutHubPIInterface {
+  /**
+   * Initialize Property Inspector with configuration
+   */
+  init(config: PIConfig): PIInitResult;
+
+  /**
+   * Called when accessory is selected in dropdown
+   */
+  selectAccessory(): void;
+
+  /**
+   * Called when service is selected in dropdown
+   */
+  selectService(): void;
+
+  /**
+   * Filter devices by room
+   */
+  filterDevices(): void;
+
+  /**
+   * Test connection to Sprut.Hub
+   */
+  testConnection(): void;
+
+  /**
+   * Refresh device list from Sprut.Hub
+   */
+  refreshDevices(): void;
+
+  /**
+   * Toggle connection settings panel visibility
+   */
+  toggleConnectionSettings(): void;
+
+  /**
+   * Save current settings
+   */
+  saveSettings(): void;
+
+  /**
+   * Get characteristic type (handles both c.type and c.control.type)
+   */
+  getCharType(c: PICharacteristic): string | number | undefined;
+
+  /**
+   * Check if characteristic value is boolean
+   */
+  isBooleanCharacteristic(c: PICharacteristic): boolean;
+
+  /**
+   * Find On characteristic in service
+   */
+  findOnCharacteristic(service: PIService): PICharacteristic | undefined;
+
+  /**
+   * DOM element cache
+   */
+  readonly $dom: Record<string, HTMLElement | null>;
+
+  /**
+   * Current settings (may be null)
+   */
+  readonly $settings: Record<string, unknown> | null;
+}
+
+/**
+ * Global SprutHubPI object
+ */
+declare var SprutHubPI: SprutHubPIInterface;

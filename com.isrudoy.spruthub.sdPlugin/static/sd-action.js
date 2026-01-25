@@ -9,7 +9,7 @@
  * ===== CJHONG ========================================== 2023.10.10 =====>
  */
 
-let $websocket, $uuid, $action, $context, $settings, $lang, $FileID = '';
+let $websocket, $uuid, $action, $context, $settings, $lang, $FileID = '', $controller = '';
 
 // Send to plugin
 WebSocket.prototype.sendToPlugin = function (payload) {
@@ -73,6 +73,7 @@ async function connectElgatoStreamDeckSocket(port, uuid, event, app, info) {
     info = JSON.parse(info);
     $uuid = uuid; $action = info.action;
     $context = info.context;
+    $controller = info.payload?.controller || 'Keypad';
     $websocket = new WebSocket('ws://127.0.0.1:' + port);
     $websocket.onopen = () => $websocket.send(JSON.stringify({ event, uuid }));
 

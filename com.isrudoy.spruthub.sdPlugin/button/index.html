@@ -15,7 +15,7 @@
 
         <div id="connectionSettingsContainer"></div>
 
-        <div class="sdpi-heading">Button Selection</div>
+        <div class="sdpi-heading">Device Selection</div>
 
         <!-- Room Select -->
         <div class="sdpi-item">
@@ -33,14 +33,6 @@
             </select>
         </div>
 
-        <!-- Service Select (shown only if multiple) -->
-        <div class="sdpi-item" id="serviceSelectRow" style="display: none;">
-            <div class="sdpi-item-label">Button</div>
-            <select class="sdpi-item-value" id="serviceSelect" onchange="SprutHubPI.selectService()">
-                <option value="">-- Select Button --</option>
-            </select>
-        </div>
-
         <!-- Custom Name -->
         <div class="sdpi-item">
             <div class="sdpi-item-label">Name</div>
@@ -53,16 +45,82 @@
             <button class="sdpi-item-value" onclick="SprutHubPI.refreshDevices()">Refresh Devices</button>
         </div>
 
-        <div class="sdpi-heading">Press Type</div>
+        <!-- Button Press Section (for Keypad) -->
+        <div id="buttonPressSection">
+            <div class="sdpi-heading">Button Press</div>
 
-        <!-- Press Type Select -->
-        <div class="sdpi-item">
-            <div class="sdpi-item-label">On Press</div>
-            <select class="sdpi-item-value" id="pressTypeSelect" onchange="SprutHubPI.saveSettings()">
-                <option value="0">Single Press</option>
-                <option value="1">Double Press</option>
-                <option value="2">Long Press</option>
-            </select>
+            <!-- Main Button Select -->
+            <div class="sdpi-item">
+                <div class="sdpi-item-label">Button</div>
+                <select class="sdpi-item-value" id="mainButton" onchange="onDialButtonChange('main')">
+                    <option value="">— Disabled —</option>
+                </select>
+            </div>
+            <!-- Main Press Type -->
+            <div class="sdpi-item" id="mainPressRow" style="display: none;">
+                <div class="sdpi-item-label">Press Type</div>
+                <select class="sdpi-item-value" id="mainPress" onchange="SprutHubPI.saveSettings()">
+                    <option value="0">Single Press</option>
+                    <option value="1">Double Press</option>
+                    <option value="2">Long Press</option>
+                </select>
+            </div>
+        </div>
+
+        <!-- Dial Actions Section (for Encoder) -->
+        <div id="dialActionsSection">
+            <div class="sdpi-heading">Dial Actions</div>
+
+            <!-- Dial Rotate Left - Button -->
+            <div class="sdpi-item">
+                <div class="sdpi-item-label">Rotate Left</div>
+                <select class="sdpi-item-value" id="dialLeftButton" onchange="onDialButtonChange('left')">
+                    <option value="">— Disabled —</option>
+                </select>
+            </div>
+            <!-- Dial Rotate Left - Press Type -->
+            <div class="sdpi-item" id="dialLeftPressRow" style="display: none;">
+                <div class="sdpi-item-label">Press Type</div>
+                <select class="sdpi-item-value" id="dialLeftPress" onchange="SprutHubPI.saveSettings()">
+                    <option value="0">Single Press</option>
+                    <option value="1">Double Press</option>
+                    <option value="2">Long Press</option>
+                </select>
+            </div>
+
+            <!-- Dial Rotate Right - Button -->
+            <div class="sdpi-item">
+                <div class="sdpi-item-label">Rotate Right</div>
+                <select class="sdpi-item-value" id="dialRightButton" onchange="onDialButtonChange('right')">
+                    <option value="">— Disabled —</option>
+                </select>
+            </div>
+            <!-- Dial Rotate Right - Press Type -->
+            <div class="sdpi-item" id="dialRightPressRow" style="display: none;">
+                <div class="sdpi-item-label">Press Type</div>
+                <select class="sdpi-item-value" id="dialRightPress" onchange="SprutHubPI.saveSettings()">
+                    <option value="0">Single Press</option>
+                    <option value="1">Double Press</option>
+                    <option value="2">Long Press</option>
+                </select>
+            </div>
+
+            <!-- Dial Press - Button -->
+            <div class="sdpi-item">
+                <div class="sdpi-item-label">Knob Press</div>
+                <select class="sdpi-item-value" id="dialPressButton" onchange="onDialButtonChange('press')">
+                    <option value="">— Disabled —</option>
+                </select>
+            </div>
+            <!-- Dial Press - Press Type -->
+            <div class="sdpi-item" id="dialPressPressRow" style="display: none;">
+                <div class="sdpi-item-label">Press Type</div>
+                <select class="sdpi-item-value" id="dialPressPress" onchange="SprutHubPI.saveSettings()">
+                    <option value="0">Single Press</option>
+                    <option value="1">Double Press</option>
+                    <option value="2">Long Press</option>
+                </select>
+            </div>
         </div>
     </div>
 

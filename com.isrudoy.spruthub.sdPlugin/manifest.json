@@ -99,10 +99,23 @@
           "Image": "static/img/commonAction"
         }
       ],
-      "Controllers": ["Keypad"],
+      "Controllers": ["Keypad", "Knob"],
       "UUID": "com.isrudoy.spruthub.button",
       "PropertyInspectorPath": "button/index.html",
       "Tooltip": "Trigger Sprut.Hub button events"
+    },
+    {
+      "Icon": "static/img/spruthubIcon",
+      "Name": "Scenario",
+      "States": [
+        {
+          "Image": "static/img/commonAction"
+        }
+      ],
+      "Controllers": ["Keypad", "Knob"],
+      "UUID": "com.isrudoy.spruthub.scenario",
+      "PropertyInspectorPath": "scenario/index.html",
+      "Tooltip": "Run Sprut.Hub automation scenarios"
     }
   ],
   "SDKVersion": 1,

@@ -16,6 +16,7 @@ const {
   LOCK_ACTION,
   SENSOR_ACTION,
   BUTTON_ACTION,
+  SCENARIO_ACTION,
 } = require('./lib/common');
 const {
   contexts,
@@ -69,6 +70,7 @@ const actions = {
   [THERMOSTAT_ACTION]: /** @type {ActionHandler} */ (require('./actions/thermostat')),
   [SENSOR_ACTION]: /** @type {ActionHandler} */ (require('./actions/sensor')),
   [BUTTON_ACTION]: /** @type {ActionHandler} */ (require('./actions/button')),
+  [SCENARIO_ACTION]: /** @type {ActionHandler} */ (require('./actions/scenario')),
 };
 
 // ============================================================

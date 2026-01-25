@@ -1,3 +1,3 @@
-- решить проблемы с типами, например com.isrudoy.spruthub.sdPlugin/outlet/index.js:36 тут сейчас SprutHubPI any
-- добавить Button в dial knob
 - Добавить Action для запуска сценария как button/dial
+- добавить в claude.md и в README.md информацию о инспекте плагинов через http://localhost:23519/ или через chrome://inspect
+- для knob варианта доступен более большой вид рендера изображения, нужно определить canvas размер, и для knob-вариантов рендерить более широкий вид, и не отображать полоску внизу

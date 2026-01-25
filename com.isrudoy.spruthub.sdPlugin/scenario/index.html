@@ -1,0 +1,44 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, minimum-scale=1, user-scalable=no">
+    <title>Scenario - Settings</title>
+    <link rel="stylesheet" href="../static/css/sdpi.css">
+    <link rel="stylesheet" href="../pi-lib/styles.css">
+    <script src="../static/common.js"></script>
+    <script src="../static/sd-action.js"></script>
+    <script src="../pi-lib/common.js"></script>
+</head>
+<body>
+    <div class="sdpi-wrapper" style="display: none;">
+
+        <div id="connectionSettingsContainer"></div>
+
+        <div class="sdpi-heading">Scenario Selection</div>
+
+        <!-- Scenario Select -->
+        <div class="sdpi-item">
+            <div class="sdpi-item-label">Scenario</div>
+            <select class="sdpi-item-value" id="scenarioSelect" onchange="selectScenario()">
+                <option value="">-- Select Scenario --</option>
+            </select>
+        </div>
+
+        <!-- Custom Name -->
+        <div class="sdpi-item">
+            <div class="sdpi-item-label">Name</div>
+            <input class="sdpi-item-value" type="text" id="customName" placeholder="Custom display name" onchange="SprutHubPI.saveSettings()">
+        </div>
+
+        <!-- Refresh Button -->
+        <div class="sdpi-item">
+            <div class="sdpi-item-label empty"></div>
+            <button class="sdpi-item-value" onclick="loadScenarios()">Refresh Scenarios</button>
+        </div>
+
+    </div>
+
+    <script src="index.js"></script>
+</body>
+</html>

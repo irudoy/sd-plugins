@@ -60,6 +60,7 @@
  * @property {() => void} [loadExtraSettings] - Load extra settings fields
  * @property {() => void} [saveExtraSettings] - Save extra settings fields
  * @property {() => Record<string, unknown>} [getExtraPluginSettings] - Get extra settings to send to plugin
+ * @property {(accessory: PIAccessory|null, services: PIService[]) => void} [onAccessorySelected] - Called when accessory is selected
  */
 
 // ============================================================
@@ -471,6 +472,10 @@ function selectAccessory() {
       $settings.serviceName = undefined;
       // Clear all characteristic IDs (handled by each PI's characteristic finder)
     }
+    // Notify callback with null accessory
+    if (piConfig?.onAccessorySelected) {
+      piConfig.onAccessorySelected(null, []);
+    }
     saveSettings();
     return;
   }
@@ -481,6 +486,12 @@ function selectAccessory() {
   if (typeof $settings !== 'undefined' && $settings) {
     $settings.accessoryId = accessory.id;
     $settings.accessoryName = accessory.name;
+  }
+
+  // Notify callback with accessory and matching services
+  if (piConfig?.onAccessorySelected) {
+    const matchingServices = accessory.services?.filter(piConfig.isServiceFn) || [];
+    piConfig.onAccessorySelected(accessory, matchingServices);
   }
 
   populateServices();
@@ -930,12 +941,149 @@ function findOnCharacteristic(service) {
 }
 
 // ============================================================
+// Connection-Only Initialization (for PIs without device selection)
+// ============================================================
+
+/**
+ * Initialize DOM for connection-only PI
+ */
+function initConnectionOnlyDom() {
+  // Inject connection settings HTML if container exists
+  const container = document.getElementById('connectionSettingsContainer');
+  if (container) {
+    container.innerHTML = renderConnectionSettings();
+  }
+
+  $dom.main = document.querySelector('.sdpi-wrapper');
+  $dom.connectionBtn = document.getElementById('connectionBtn');
+  $dom.connectionStatusText = document.getElementById('connectionStatusText');
+  $dom.connectionSettings = document.getElementById('connectionSettings');
+  $dom.host = document.getElementById('host');
+  $dom.token = document.getElementById('token');
+  $dom.serial = document.getElementById('serial');
+  $dom.testButton = document.getElementById('testButton');
+  $dom.statusMessage = document.getElementById('statusMessage');
+}
+
+/**
+ * Callback for custom sendToPropertyInspector handling
+ * @callback CustomSendToPI
+ * @param {Record<string, unknown>} data
+ * @returns {boolean} - true if handled, false to use default handling
+ */
+
+/**
+ * Initialize connection-only Property Inspector (no device selection)
+ * @param {{onSendToPropertyInspector?: CustomSendToPI}} [options]
+ * @returns {{ $propEvent: object, getConnectionSettings: () => GlobalSettings }}
+ */
+function initConnectionOnly(options = {}) {
+  initConnectionOnlyDom();
+
+  /**
+   * Handle sendToPropertyInspector for connection-only PI
+   * @param {Record<string, unknown>} data
+   */
+  function connectionOnlySendToPI(data) {
+    if (!data) return;
+
+    // Allow custom handler first
+    if (options.onSendToPropertyInspector && options.onSendToPropertyInspector(data)) {
+      return;
+    }
+
+    // Default handling for connection events
+    switch (data.event) {
+      case 'testResult':
+        if (data.success) {
+          showStatus('Connection successful!', 'success');
+          saveGlobalSettings();
+          updateConnectionStatus(true, getInputValue($dom.host));
+          if (connectionSettingsVisible) {
+            toggleConnectionSettings();
+          }
+        } else {
+          showStatus('Error: ' + (data.error || 'Unknown error'), 'error');
+          updateConnectionStatus(false);
+        }
+        enableTestButton();
+        break;
+
+      case 'connectionStatus':
+        if (data.status === 'success') {
+          showStatus(/** @type {string} */ (data.message) || 'Connected', 'success');
+          updateConnectionStatus(true, getInputValue($dom.host));
+          if (connectionSettingsVisible) {
+            toggleConnectionSettings();
+          }
+        } else if (data.status === 'error') {
+          showStatus(/** @type {string} */ (data.message) || 'Connection failed', 'error');
+        } else if (data.status === 'connecting') {
+          showStatus('Connecting...', 'info');
+        }
+        break;
+
+      case 'error':
+        showStatus('Error: ' + (data.message || 'Unknown error'), 'error');
+        break;
+    }
+  }
+
+  /**
+   * Handle didReceiveSettings for connection-only PI
+   * @param {{settings: Record<string, unknown>}} data
+   */
+  function connectionOnlyDidReceiveSettings(data) {
+    const settings = data.settings || {};
+    loadConnectionSettings(settings);
+    requestGlobalSettings();
+  }
+
+  /**
+   * Handle didReceiveGlobalSettings for connection-only PI
+   * @param {{settings: GlobalSettings}} data
+   */
+  function connectionOnlyDidReceiveGlobalSettings(data) {
+    globalSettings = data.settings || {};
+    loadConnectionSettings(globalSettings);
+
+    // Sync global connection settings to local
+    if (typeof $settings !== 'undefined' && $settings) {
+      if (globalSettings.host) $settings.host = globalSettings.host;
+      if (globalSettings.token) $settings.token = globalSettings.token;
+      if (globalSettings.serial) $settings.serial = globalSettings.serial;
+    }
+
+    const hasCredentials = globalSettings.host && globalSettings.token && globalSettings.serial;
+    if (hasCredentials) {
+      updateConnectionStatus(true, globalSettings.host);
+    } else {
+      updateConnectionStatus(false);
+    }
+  }
+
+  return {
+    $propEvent: {
+      didReceiveSettings: connectionOnlyDidReceiveSettings,
+      sendToPropertyInspector: connectionOnlySendToPI,
+      didReceiveGlobalSettings: connectionOnlyDidReceiveGlobalSettings,
+    },
+    getConnectionSettings: () => ({
+      host: globalSettings.host || getInputValue($dom.host),
+      token: globalSettings.token || getInputValue($dom.token),
+      serial: globalSettings.serial || getInputValue($dom.serial),
+    }),
+  };
+}
+
+// ============================================================
 // Exports (for browser global scope)
 // ============================================================
 
 // These are exposed globally for the PI to use
 window.SprutHubPI = {
   init: initPI,
+  initConnectionOnly,
   // Event handlers (called by HTML onclick)
   selectAccessory,
   selectService,
@@ -955,5 +1103,13 @@ window.SprutHubPI = {
   // Access to settings
   get $settings() {
     return typeof $settings !== 'undefined' ? $settings : null;
+  },
+  // Access to devices list
+  get devices() {
+    return devices;
+  },
+  // Access to PI config
+  get config() {
+    return piConfig;
   },
 };

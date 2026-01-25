@@ -38,6 +38,15 @@ const {
  * @property {number} [characteristicId]
  * @property {string} [customName]
  * @property {number} [pressType] - 0=single, 1=double, 2=long
+ * @property {number} [dialLeftServiceId] - Service ID for dial left action
+ * @property {number} [dialLeftCharId] - Characteristic ID for dial left action
+ * @property {number} [dialLeftPressType] - 0=single, 1=double, 2=long
+ * @property {number} [dialRightServiceId] - Service ID for dial right action
+ * @property {number} [dialRightCharId] - Characteristic ID for dial right action
+ * @property {number} [dialRightPressType] - 0=single, 1=double, 2=long
+ * @property {number} [dialPressServiceId] - Service ID for dial press action
+ * @property {number} [dialPressCharId] - Characteristic ID for dial press action
+ * @property {number} [dialPressPressType] - 0=single, 1=double, 2=long
  */
 
 /**
@@ -165,8 +174,93 @@ const buttonAction = new BaseAction({
   mapSettings: (payload) => ({
     ...mapBaseSettings(payload),
     pressType: typeof payload.pressType === 'number' ? payload.pressType : PRESS_SINGLE,
+    // Dial Left
+    dialLeftServiceId:
+      typeof payload.dialLeftServiceId === 'number' ? payload.dialLeftServiceId : undefined,
+    dialLeftCharId: typeof payload.dialLeftCharId === 'number' ? payload.dialLeftCharId : undefined,
+    dialLeftPressType:
+      typeof payload.dialLeftPressType === 'number' ? payload.dialLeftPressType : PRESS_SINGLE,
+    // Dial Right
+    dialRightServiceId:
+      typeof payload.dialRightServiceId === 'number' ? payload.dialRightServiceId : undefined,
+    dialRightCharId:
+      typeof payload.dialRightCharId === 'number' ? payload.dialRightCharId : undefined,
+    dialRightPressType:
+      typeof payload.dialRightPressType === 'number' ? payload.dialRightPressType : PRESS_SINGLE,
+    // Dial Press
+    dialPressServiceId:
+      typeof payload.dialPressServiceId === 'number' ? payload.dialPressServiceId : undefined,
+    dialPressCharId:
+      typeof payload.dialPressCharId === 'number' ? payload.dialPressCharId : undefined,
+    dialPressPressType:
+      typeof payload.dialPressPressType === 'number' ? payload.dialPressPressType : PRESS_SINGLE,
   }),
 });
+
+// ============================================================
+// Shared Button Press Logic
+// ============================================================
+
+/**
+ * Trigger a button press event with visual feedback
+ * @param {string} context - Action context
+ * @param {ButtonSettings} settings - Button settings
+ * @param {number} serviceId - Service ID to trigger
+ * @param {number} characteristicId - Characteristic ID to trigger
+ * @param {number} eventType - Press type (0=single, 1=double, 2=long)
+ * @returns {Promise<boolean>} - True if successful
+ */
+async function triggerButtonPress(context, settings, serviceId, characteristicId, eventType) {
+  const { host, token, serial, accessoryId } = settings;
+
+  if (!host || !token || !serial || !accessoryId) {
+    log('[Button] triggerButtonPress: missing required settings');
+    return false;
+  }
+
+  if (!serviceId || !characteristicId) {
+    log('[Button] triggerButtonPress: missing serviceId or characteristicId');
+    return false;
+  }
+
+  try {
+    const client = getClient(host, token, serial);
+    if (!client || !client.isConnected()) {
+      log('[Button] triggerButtonPress: client not connected');
+      return false;
+    }
+
+    // Show pressed state for visual feedback
+    const ctx = getContext(context);
+    if (ctx) {
+      ctx.state = { ...ctx.state, pressed: true };
+      buttonAction.updateButton(context, settings, /** @type {ButtonState} */ (ctx.state));
+    }
+
+    // Send the button press event
+    log('[Button] Triggering button press:', {
+      accessoryId,
+      serviceId,
+      characteristicId,
+      eventType,
+    });
+    await client.updateCharacteristic(accessoryId, serviceId, characteristicId, eventType);
+
+    // Reset to ready state after brief delay
+    setTimeout(() => {
+      const c = getContext(context);
+      if (c) {
+        c.state = { ...c.state, pressed: false };
+        buttonAction.updateButton(context, settings, /** @type {ButtonState} */ (c.state));
+      }
+    }, 300);
+
+    return true;
+  } catch (err) {
+    log('[Button] Error triggering button:', err);
+    return false;
+  }
+}
 
 // ============================================================
 // Custom onKeyUp - Trigger button with visual feedback
@@ -183,53 +277,73 @@ async function onKeyUp(context, payload) {
   const settings = /** @type {ButtonSettings} */ (
     payload?.settings || getContext(context)?.settings || {}
   );
-  const { host, token, serial, accessoryId, serviceId, characteristicId, pressType } = settings;
-
-  if (!host || !token || !serial || !accessoryId) {
-    log('[Button] onKeyUp: missing required settings');
-    return;
-  }
+  const { serviceId, characteristicId } = settings;
+  const eventType = settings.pressType ?? PRESS_SINGLE;
 
   if (!serviceId || !characteristicId) {
     log('[Button] onKeyUp: missing serviceId or characteristicId');
     return;
   }
 
-  try {
-    const client = getClient(host, token, serial);
-    if (!client || !client.isConnected()) {
-      log('[Button] onKeyUp: client not connected');
-      return;
-    }
+  await triggerButtonPress(context, settings, serviceId, characteristicId, eventType);
+}
 
-    // Show pressed state for visual feedback
-    const ctx = getContext(context);
-    if (ctx) {
-      ctx.state = { ...ctx.state, pressed: true };
-      buttonAction.updateButton(context, settings, /** @type {ButtonState} */ (ctx.state));
-    }
+// ============================================================
+// Dial Handlers
+// ============================================================
 
-    // Send the button press event
-    const eventValue = pressType ?? PRESS_SINGLE;
-    log('[Button] Triggering button press:', {
-      accessoryId,
-      serviceId,
-      characteristicId,
-      eventValue,
-    });
-    await client.updateCharacteristic(accessoryId, serviceId, characteristicId, eventValue);
+/**
+ * Handle dial rotation - each tick triggers configured button
+ * @param {string} context - Action context
+ * @param {import('../../../types/streamdock').DialRotatePayload} payload - Dial payload
+ * @returns {Promise<void>}
+ */
+async function onDialRotate(context, payload) {
+  /** @type {ButtonSettings} */
+  const settings = /** @type {ButtonSettings} */ (
+    payload?.settings || getContext(context)?.settings || {}
+  );
 
-    // Reset to ready state after brief delay
-    setTimeout(() => {
-      const c = getContext(context);
-      if (c) {
-        c.state = { ...c.state, pressed: false };
-        buttonAction.updateButton(context, settings, /** @type {ButtonState} */ (c.state));
-      }
-    }, 300);
-  } catch (err) {
-    log('[Button] Error triggering button:', err);
+  const ticks = payload?.ticks || 0;
+  if (ticks === 0) return;
+
+  // Get the right dial action settings based on direction
+  const isRight = ticks > 0;
+  const serviceId = isRight ? settings.dialRightServiceId : settings.dialLeftServiceId;
+  const charId = isRight ? settings.dialRightCharId : settings.dialLeftCharId;
+  const pressType = isRight ? settings.dialRightPressType : settings.dialLeftPressType;
+
+  // Skip if dial action not configured
+  if (!serviceId || !charId) return;
+
+  const eventType = pressType ?? PRESS_SINGLE;
+
+  // Each tick triggers one event
+  const tickCount = Math.abs(ticks);
+  for (let i = 0; i < tickCount; i++) {
+    await triggerButtonPress(context, settings, serviceId, charId, eventType);
   }
+}
+
+/**
+ * Handle dial press - triggers configured button
+ * @param {string} context - Action context
+ * @param {import('../../../types/streamdock').DialUpDownPayload} payload - Dial payload
+ * @returns {Promise<void>}
+ */
+async function onDialDown(context, payload) {
+  /** @type {ButtonSettings} */
+  const settings = /** @type {ButtonSettings} */ (
+    payload?.settings || getContext(context)?.settings || {}
+  );
+
+  const { dialPressServiceId, dialPressCharId, dialPressPressType } = settings;
+
+  // Skip if dial press not configured
+  if (!dialPressServiceId || !dialPressCharId) return;
+
+  const eventType = dialPressPressType ?? PRESS_SINGLE;
+  await triggerButtonPress(context, settings, dialPressServiceId, dialPressCharId, eventType);
 }
 
 // ============================================================
@@ -239,4 +353,6 @@ async function onKeyUp(context, payload) {
 module.exports = {
   ...buttonAction.getExports(),
   onKeyUp, // Override with pressed feedback behavior
+  onDialRotate,
+  onDialDown,
 };
