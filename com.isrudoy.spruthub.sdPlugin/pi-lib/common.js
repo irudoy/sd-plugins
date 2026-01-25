@@ -397,23 +397,7 @@ function loadDeviceSettings(settings) {
 // ============================================================
 
 /**
- * Save settings (connection-only mode)
- */
-function saveConnectionOnlySettings() {
-  if (typeof $settings === 'undefined' || !$settings) return;
-
-  $settings.host = globalSettings.host || getInputValue($dom.host);
-  $settings.token = globalSettings.token || getInputValue($dom.token);
-  $settings.serial = globalSettings.serial || getInputValue($dom.serial);
-
-  const customName = /** @type {HTMLInputElement|null} */ ($dom.customName);
-  if (customName) {
-    $settings.customName = customName.value?.trim() || '';
-  }
-}
-
-/**
- * Save settings (with device selection)
+ * Save settings (works for both connection-only and device selection modes)
  */
 function saveSettings() {
   if (typeof $settings === 'undefined' || !$settings) return;
@@ -425,16 +409,19 @@ function saveSettings() {
 
   // Common settings
   const customName = /** @type {HTMLInputElement|null} */ ($dom.customName);
-  const actionSelect = /** @type {HTMLSelectElement|null} */ ($dom.actionSelect);
-
   $settings.customName = customName?.value?.trim() || '';
-  $settings.action = actionSelect?.value || deviceConfig?.defaultAction || 'toggle';
 
-  if (deviceConfig?.saveExtraSettings) {
-    deviceConfig.saveExtraSettings();
+  // Device selection specific
+  if (deviceConfig) {
+    const actionSelect = /** @type {HTMLSelectElement|null} */ ($dom.actionSelect);
+    $settings.action = actionSelect?.value || deviceConfig.defaultAction || 'toggle';
+
+    if (deviceConfig.saveExtraSettings) {
+      deviceConfig.saveExtraSettings();
+    }
+
+    sendSettingsToPlugin();
   }
-
-  sendSettingsToPlugin();
 }
 
 /**
@@ -773,8 +760,8 @@ function handleDidReceiveGlobalSettingsConnection(data) {
     if (globalSettings.serial) $settings.serial = globalSettings.serial;
   }
 
-  const hasCredentials = globalSettings.host && globalSettings.token && globalSettings.serial;
-  updateConnectionStatus(hasCredentials, globalSettings.host);
+  // Show "Configured" (not "Connected") - actual connection status updated after test
+  updateConnectionStatus(false, globalSettings.host);
 }
 
 /**

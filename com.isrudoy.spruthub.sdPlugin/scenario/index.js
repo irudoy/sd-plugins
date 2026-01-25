@@ -35,9 +35,6 @@ function selectScenario() {
   saveScenarioSettings();
 }
 
-// @ts-ignore - exposed globally for HTML onclick
-window.selectScenario = selectScenario;
-
 /**
  * Save scenario-specific settings
  */
@@ -118,8 +115,11 @@ function loadScenarios() {
   });
 }
 
-// @ts-ignore - exposed globally for HTML onclick
-window.loadScenarios = loadScenarios;
+// Expose globally for HTML onclick
+/** @type {Window & {selectScenario?: typeof selectScenario, loadScenarios?: typeof loadScenarios}} */
+const win = /** @type {*} */ (window);
+win.selectScenario = selectScenario;
+win.loadScenarios = loadScenarios;
 
 /**
  * Handle custom sendToPropertyInspector events
