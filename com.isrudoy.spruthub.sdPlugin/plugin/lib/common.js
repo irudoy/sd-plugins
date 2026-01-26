@@ -48,13 +48,23 @@ const BUTTON_ACTION = 'com.isrudoy.spruthub.button';
 /** @type {string} */
 const SCENARIO_ACTION = 'com.isrudoy.spruthub.scenario';
 
-// Canvas dimensions
+// Canvas dimensions for Keypad (square button)
 /** @type {number} */
 const CANVAS_SIZE = 144;
 /** @type {number} */
 const CANVAS_CENTER = CANVAS_SIZE / 2;
 
-// Drawing layout constants
+// Canvas dimensions for Knob (wide touchscreen area)
+/** @type {number} */
+const KNOB_WIDTH = 230;
+/** @type {number} */
+const KNOB_HEIGHT = 144;
+/** @type {number} */
+const KNOB_CENTER_X = KNOB_WIDTH / 2; // 144
+/** @type {number} */
+const KNOB_CENTER_Y = KNOB_HEIGHT / 2; // 72
+
+// Drawing layout constants for Keypad (144x144)
 const LAYOUT = {
   bulbY: 50,
   bulbSize: 70,
@@ -64,6 +74,17 @@ const LAYOUT = {
   brightnessY: 125,
   statusBarY: CANVAS_SIZE - 6,
   statusBarHeight: 6,
+};
+
+// Drawing layout constants for Knob (230x144) - no status bar
+const KNOB_LAYOUT = {
+  iconX: 50, // Icon center X (left side)
+  iconY: 72, // Icon center Y (vertical center)
+  iconSize: 70, // Icon size (same as keypad)
+  nameX: 95, // Name X position (right side)
+  nameY: 65, // Name Y position
+  statusX: 95, // Status text X
+  statusY: 100, // Status text Y
 };
 
 // ============================================================
@@ -133,6 +154,11 @@ module.exports = {
   CANVAS_SIZE,
   CANVAS_CENTER,
   LAYOUT,
+  KNOB_WIDTH,
+  KNOB_HEIGHT,
+  KNOB_CENTER_X,
+  KNOB_CENTER_Y,
+  KNOB_LAYOUT,
   COLORS,
   DEFAULT_UPDATE_INTERVAL,
   REQUEST_TIMEOUT,

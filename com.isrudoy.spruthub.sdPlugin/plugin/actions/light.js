@@ -8,11 +8,15 @@ const { LIGHT_ACTION, COLORS } = require('../lib/common');
 const { BaseAction, SprutHub, mapBaseSettings, handleToggleKeyUp } = require('../lib/base-action');
 const {
   createButtonCanvas,
+  createKnobCanvas,
   drawStatusBar,
   drawDeviceName,
   drawStatusText,
   CANVAS_CENTER,
   LAYOUT,
+  KNOB_WIDTH,
+  KNOB_HEIGHT,
+  KNOB_LAYOUT,
 } = require('../lib/draw-common');
 
 // ============================================================
@@ -132,6 +136,78 @@ function renderState(settings, state, name) {
   return canvas.toDataURL('image/png');
 }
 
+/**
+ * Render light state to knob image (230x144, no status bar)
+ * @param {LightSettings} settings
+ * @param {LightState} state
+ * @param {string} name
+ * @returns {string}
+ */
+function renderKnobState(settings, state, name) {
+  const { canvas, ctx } = createKnobCanvas();
+
+  const iconColor = state.on ? COLORS.warmYellow : COLORS.gray;
+  const textColor = state.on ? COLORS.white : COLORS.gray;
+
+  // Draw icon on left side
+  drawLightbulb(ctx, KNOB_LAYOUT.iconX, KNOB_LAYOUT.iconY, KNOB_LAYOUT.iconSize, iconColor);
+
+  // Device name and status - vertically centered relative to icon
+  ctx.fillStyle = textColor;
+  ctx.font = 'bold 16px sans-serif';
+  ctx.textAlign = 'left';
+  const displayName = name || 'Light';
+  const maxCharsPerLine = 10;
+  const lineHeight = 18;
+  const statusGap = 8;
+  const centerY = KNOB_LAYOUT.iconY + 5; // Center relative to icon, slightly lower
+
+  // Parse name into lines
+  let line1 = '';
+  let line2 = '';
+
+  if (displayName.length > maxCharsPerLine) {
+    const words = displayName.split(' ');
+    for (const word of words) {
+      if (line1.length === 0) {
+        line1 = word;
+      } else if ((line1 + ' ' + word).length <= maxCharsPerLine) {
+        line1 += ' ' + word;
+      } else {
+        line2 += (line2 ? ' ' : '') + word;
+      }
+    }
+    if (line2.length > maxCharsPerLine) {
+      line2 = line2.substring(0, maxCharsPerLine - 1) + '…';
+    }
+  } else {
+    line1 = displayName;
+  }
+
+  // Calculate total height and starting Y
+  const hasLine2 = line2.length > 0;
+  const totalHeight = (hasLine2 ? 2 : 1) * lineHeight + statusGap + 20; // 20 for status
+  const startY = centerY - totalHeight / 2 + lineHeight / 2;
+
+  // Draw name
+  ctx.fillText(line1, KNOB_LAYOUT.nameX, startY);
+  if (hasLine2) {
+    ctx.fillText(line2, KNOB_LAYOUT.nameX, startY + lineHeight);
+  }
+
+  // Status text (brightness or On/Off)
+  ctx.font = 'bold 20px sans-serif';
+  ctx.fillStyle = state.on ? COLORS.warmYellow : COLORS.gray;
+  const statusY = startY + (hasLine2 ? 2 : 1) * lineHeight + statusGap;
+  if (state.on && state.brightness !== undefined) {
+    ctx.fillText(state.brightness + '%', KNOB_LAYOUT.statusX, statusY);
+  } else {
+    ctx.fillText(state.on ? 'On' : 'Off', KNOB_LAYOUT.statusX, statusY);
+  }
+
+  return canvas.toDataURL('image/png');
+}
+
 // ============================================================
 // Action Configuration
 // ============================================================
@@ -158,6 +234,7 @@ const lightAction = new BaseAction({
   },
 
   renderState,
+  renderKnobState,
 
   handleStateChange: (state, settings, characteristicId, value) => {
     const newState = { ...state };

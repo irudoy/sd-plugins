@@ -208,6 +208,7 @@ export namespace EventPayload {
       };
       state: number;
       isInMultiAction: boolean;
+      controller?: 'Keypad' | 'Knob';
     };
   };
 
@@ -380,6 +381,7 @@ export interface AppearPayload<S = Record<string, unknown>> {
   coordinates: Coordinates;
   state?: number;
   isInMultiAction?: boolean;
+  controller?: 'Keypad' | 'Knob';
 }
 
 /**

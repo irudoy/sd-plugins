@@ -5,7 +5,15 @@
  */
 
 const { createCanvas } = require('canvas');
-const { CANVAS_SIZE, CANVAS_CENTER, LAYOUT, COLORS } = require('./common');
+const {
+  CANVAS_SIZE,
+  CANVAS_CENTER,
+  LAYOUT,
+  KNOB_WIDTH,
+  KNOB_HEIGHT,
+  KNOB_LAYOUT,
+  COLORS,
+} = require('./common');
 
 // ============================================================
 // Type Definitions
@@ -39,6 +47,18 @@ function createButtonCanvas() {
   const ctx = canvas.getContext('2d');
   ctx.fillStyle = COLORS.background;
   ctx.fillRect(0, 0, CANVAS_SIZE, CANVAS_SIZE);
+  return { canvas, ctx };
+}
+
+/**
+ * Create a 200x100 canvas for Knob (wide touchscreen area)
+ * @returns {{canvas: import('canvas').Canvas, ctx: CanvasContext}}
+ */
+function createKnobCanvas() {
+  const canvas = createCanvas(KNOB_WIDTH, KNOB_HEIGHT);
+  const ctx = canvas.getContext('2d');
+  ctx.fillStyle = COLORS.background;
+  ctx.fillRect(0, 0, KNOB_WIDTH, KNOB_HEIGHT);
   return { canvas, ctx };
 }
 
@@ -212,12 +232,156 @@ function drawOfflineWithIcon(drawIconFn, name) {
 }
 
 // ============================================================
+// Knob State Drawings (200x100, no status bar)
+// ============================================================
+
+/**
+ * Draw error state for knob
+ * @param {string} message - Error message
+ * @returns {string} Base64 PNG data URL
+ */
+function drawKnobError(message) {
+  const { canvas, ctx } = createKnobCanvas();
+
+  // Dark red background
+  ctx.fillStyle = '#3d1a1a';
+  ctx.fillRect(0, 0, KNOB_WIDTH, KNOB_HEIGHT);
+
+  // Error icon (!)
+  ctx.fillStyle = COLORS.red;
+  ctx.font = 'bold 40px sans-serif';
+  ctx.textAlign = 'center';
+  ctx.fillText('!', KNOB_LAYOUT.iconX, KNOB_LAYOUT.iconY + 14);
+
+  // Error message
+  ctx.fillStyle = COLORS.white;
+  ctx.font = 'bold 16px sans-serif';
+  ctx.textAlign = 'left';
+  ctx.fillText(truncateText(message || 'Error', 16), KNOB_LAYOUT.nameX, KNOB_HEIGHT / 2 + 6);
+
+  return canvas.toDataURL('image/png');
+}
+
+/**
+ * Draw connecting state for knob with icon
+ * @param {IconDrawFn} drawIconFn - Function to draw the icon
+ * @returns {string} Base64 PNG data URL
+ */
+function drawKnobConnectingWithIcon(drawIconFn) {
+  const { canvas, ctx } = createKnobCanvas();
+
+  // Draw icon in yellow
+  drawIconFn(ctx, KNOB_LAYOUT.iconX, KNOB_LAYOUT.iconY, KNOB_LAYOUT.iconSize, COLORS.yellow);
+
+  // "Connecting..." text
+  ctx.fillStyle = COLORS.yellow;
+  ctx.font = 'bold 18px sans-serif';
+  ctx.textAlign = 'left';
+  ctx.fillText('Connecting...', KNOB_LAYOUT.nameX, KNOB_HEIGHT / 2 + 6);
+
+  return canvas.toDataURL('image/png');
+}
+
+/**
+ * Draw not configured state for knob with icon
+ * @param {IconDrawFn} drawIconFn - Function to draw the icon
+ * @returns {string} Base64 PNG data URL
+ */
+function drawKnobNotConfiguredWithIcon(drawIconFn) {
+  const { canvas, ctx } = createKnobCanvas();
+
+  // Dark blue background
+  ctx.fillStyle = '#1a1a2e';
+  ctx.fillRect(0, 0, KNOB_WIDTH, KNOB_HEIGHT);
+
+  // Draw icon in gray
+  drawIconFn(ctx, KNOB_LAYOUT.iconX, KNOB_LAYOUT.iconY, KNOB_LAYOUT.iconSize, COLORS.gray);
+
+  // "Setup" text
+  ctx.fillStyle = COLORS.white;
+  ctx.font = 'bold 18px sans-serif';
+  ctx.textAlign = 'left';
+  ctx.fillText('Setup', KNOB_LAYOUT.nameX, KNOB_LAYOUT.nameY);
+
+  // Subtitle
+  ctx.fillStyle = COLORS.gray;
+  ctx.font = '14px sans-serif';
+  ctx.fillText('Open settings', KNOB_LAYOUT.statusX, KNOB_LAYOUT.statusY);
+
+  return canvas.toDataURL('image/png');
+}
+
+/**
+ * Draw offline state for knob with icon
+ * @param {IconDrawFn} drawIconFn - Function to draw the icon
+ * @param {string} name - Device name
+ * @returns {string} Base64 PNG data URL
+ */
+function drawKnobOfflineWithIcon(drawIconFn, name) {
+  const { canvas, ctx } = createKnobCanvas();
+
+  // Draw icon in unavailable color
+  drawIconFn(ctx, KNOB_LAYOUT.iconX, KNOB_LAYOUT.iconY, KNOB_LAYOUT.iconSize, COLORS.unavailable);
+
+  // Device name and status - vertically centered relative to icon
+  ctx.fillStyle = COLORS.unavailable;
+  ctx.font = 'bold 16px sans-serif';
+  ctx.textAlign = 'left';
+  const displayName = name || 'Device';
+  const maxCharsPerLine = 10;
+  const lineHeight = 18;
+  const statusGap = 8;
+  const centerY = KNOB_LAYOUT.iconY + 5;
+
+  // Parse name into lines
+  let line1 = '';
+  let line2 = '';
+
+  if (displayName.length > maxCharsPerLine) {
+    const words = displayName.split(' ');
+    for (const word of words) {
+      if (line1.length === 0) {
+        line1 = word;
+      } else if ((line1 + ' ' + word).length <= maxCharsPerLine) {
+        line1 += ' ' + word;
+      } else {
+        line2 += (line2 ? ' ' : '') + word;
+      }
+    }
+    if (line2.length > maxCharsPerLine) {
+      line2 = line2.substring(0, maxCharsPerLine - 1) + '…';
+    }
+  } else {
+    line1 = displayName;
+  }
+
+  // Calculate total height and starting Y
+  const hasLine2 = line2.length > 0;
+  const totalHeight = (hasLine2 ? 2 : 1) * lineHeight + statusGap + 20;
+  const startY = centerY - totalHeight / 2 + lineHeight / 2;
+
+  // Draw name
+  ctx.fillText(line1, KNOB_LAYOUT.nameX, startY);
+  if (hasLine2) {
+    ctx.fillText(line2, KNOB_LAYOUT.nameX, startY + lineHeight);
+  }
+
+  // "Offline" status
+  ctx.font = '20px sans-serif';
+  const statusY = startY + (hasLine2 ? 2 : 1) * lineHeight + statusGap;
+  ctx.fillText('Offline', KNOB_LAYOUT.statusX, statusY);
+
+  return canvas.toDataURL('image/png');
+}
+
+// ============================================================
 // Exports
 // ============================================================
 
 module.exports = {
   // Canvas utilities
   createButtonCanvas,
+  createKnobCanvas,
   drawStatusBar,
   drawDeviceName,
   drawStatusText,
@@ -226,10 +390,18 @@ module.exports = {
   CANVAS_SIZE,
   CANVAS_CENTER,
   LAYOUT,
+  KNOB_WIDTH,
+  KNOB_HEIGHT,
+  KNOB_LAYOUT,
   COLORS,
-  // Common state drawings
+  // Common state drawings (Keypad)
   drawError,
   drawConnectingWithIcon,
   drawNotConfiguredWithIcon,
   drawOfflineWithIcon,
+  // Common state drawings (Knob)
+  drawKnobError,
+  drawKnobConnectingWithIcon,
+  drawKnobNotConfiguredWithIcon,
+  drawKnobOfflineWithIcon,
 };

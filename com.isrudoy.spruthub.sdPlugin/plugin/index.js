@@ -169,15 +169,10 @@ function onSendToPlugin(handler, action, context, payload) {
   const handled = handler.onSendToPlugin(context, payload);
   if (handled) return;
 
-  // Handle settings update
+  // Handle settings update - let onSettingsUpdate handle the settings storage
+  // to properly detect device changes
   /** @type {Record<string, unknown>} */
   const settings = /** @type {Record<string, unknown>} */ (payload);
-  if (contexts[context]) {
-    contexts[context].settings = settings;
-  } else {
-    setContext(context, { settings, action });
-  }
-
   handler.onSettingsUpdate(context, settings);
 }
 

@@ -220,7 +220,8 @@ const switchAction = new BaseAction({
   initialState: { on: false },
   findService: (accessory) => SprutHubClient.findSwitchService(accessory),
   extractState: extractOnOffState,
-  renderState,
+  renderState,              // Keypad rendering (144x144)
+  renderKnobState,          // Knob rendering (230x144) - optional
   handleStateChange: handleOnOffStateChange,
   handleKeyUp: handleToggleKeyUp,
 });
@@ -228,13 +229,50 @@ const switchAction = new BaseAction({
 module.exports = switchAction.getExports();
 ```
 
-### Dial Rotation (Knob Support)
+### Knob Support (StreamDock+)
 
-Actions can support StreamDock+ dial/knob with two callbacks:
+StreamDock+ devices have two controller types with different canvas sizes:
+- **Keypad** — standard square button (144×144 px)
+- **Knob** — wide touchscreen above encoder dial (230×144 px)
+
+The `willAppear` event payload contains `controller: 'Keypad' | 'Knob'` to detect the type.
+
+**Dial rotation callbacks:**
 - `previewDialRotate` — immediate UI update (no API call)
 - `handleDialRotate` — debounced API call (150ms)
 
 State is synced across all buttons for the same accessory via `syncAccessoryState()`.
+
+**Adding Knob rendering to an action:**
+
+1. Implement `renderKnobState(ctx, state, settings)` function that draws on 230×144 canvas
+2. Pass it to BaseAction config: `renderKnobState: renderKnobState`
+3. BaseAction automatically chooses between Keypad/Knob rendering based on controller type
+
+```javascript
+// Example renderKnobState for light action (light.js)
+function renderKnobState(ctx, state, settings) {
+  const { canvas, ctx: c } = createKnobCanvas();
+  const isOn = state.on;
+  const color = isOn ? COLORS.warmYellow : COLORS.gray;
+
+  // Draw icon on left side
+  drawBulbIcon(c, KNOB_LAYOUT.iconX, KNOB_LAYOUT.iconY, KNOB_LAYOUT.iconSize, color);
+
+  // Draw name and status on right side
+  c.fillStyle = COLORS.white;
+  c.font = '18px Arial';
+  c.textAlign = 'left';
+  c.fillText(settings.displayName || 'Light', KNOB_LAYOUT.nameX, KNOB_LAYOUT.nameY);
+
+  c.fillStyle = color;
+  c.font = '16px Arial';
+  const statusText = isOn ? `${state.brightness}%` : 'Off';
+  c.fillText(statusText, KNOB_LAYOUT.statusX, KNOB_LAYOUT.statusY);
+
+  return canvas.toDataURL('image/png');
+}
+```
 
 ### Sprut.Hub API
 
@@ -280,11 +318,14 @@ All actions support these visual states:
 
 ### Canvas Drawing
 
-Uses `node-canvas` for dynamic button images (144x144 PNG).
+Uses `node-canvas` for dynamic button images. Two canvas sizes:
+- **Keypad**: 144×144 px (square button)
+- **Knob**: 230×144 px (wide touchscreen)
 
 **draw-common.js** — shared drawing utilities:
 ```javascript
 const {
+  // Keypad (144x144)
   createButtonCanvas,    // Returns { canvas, ctx } for 144x144 canvas
   drawStatusBar,         // Bottom status bar
   drawDeviceName,        // Device name text
@@ -293,24 +334,50 @@ const {
   drawConnectingWithIcon,
   drawNotConfiguredWithIcon,
   drawOfflineWithIcon,
+
+  // Knob (230x144)
+  createKnobCanvas,      // Returns { canvas, ctx } for 230x144 canvas
+  drawKnobError,
+  drawKnobConnectingWithIcon,
+  drawKnobNotConfiguredWithIcon,
+  drawKnobOfflineWithIcon,
+
+  // Constants
   CANVAS_SIZE,           // 144
   CANVAS_CENTER,         // 72
-  LAYOUT,                // Layout constants (see below)
+  LAYOUT,                // Keypad layout constants
 } = require('../lib/draw-common');
 ```
 
-**Layout constants (draw-common.js):**
+**Keypad layout constants (common.js):**
 ```javascript
 const LAYOUT = {
   bulbY: 50,           // Icon vertical position
   bulbSize: 70,        // Icon size
   nameY: 104,          // Device name Y position
-  nameYOff: 115,       // Device name Y when off (no status text)
+  nameYOff: 109,       // Device name Y when off (no status text)
   brightnessY: 125,    // Status text Y position
   statusBarY: 138,     // Status bar Y position
   statusBarHeight: 6,  // Status bar height
 };
 ```
+
+**Knob layout constants (common.js):**
+```javascript
+const KNOB_WIDTH = 230;
+const KNOB_HEIGHT = 144;
+const KNOB_LAYOUT = {
+  iconX: 50,           // Icon center X (left side)
+  iconY: 72,           // Icon center Y (vertical center)
+  iconSize: 70,        // Icon size
+  nameX: 95,           // Name X position (right side)
+  nameY: 65,           // Name Y position
+  statusX: 95,         // Status text X
+  statusY: 100,        // Status text Y
+};
+```
+
+**Note:** Knob layout has no status bar — the wide format uses horizontal layout with icon on left, text on right.
 
 ## Critical Knowledge
 
@@ -326,6 +393,10 @@ Used via `@type` in JSDoc:
 /** @type {StreamDockSettings} */
 const settings = data.settings || {};
 ```
+
+**Key types for Knob support:**
+- `AppearPayload.controller` — `'Keypad' | 'Knob'` (controller type from `willAppear`)
+- `ActionContext.controller` — stored controller type for rendering decisions
 
 ### StreamDock vs Elgato SDK
 
@@ -486,6 +557,8 @@ if (dataPartition) {
 3. **setImage not working** — Use PNG, not SVG
 4. **Razer not detected** — Requires Input Monitoring permission
 5. **DEBUG left enabled** — Set `DEBUG = true` in `plugin/lib/common.js` for debugging (logs to `plugin/plugin.log`), but ensure it's `false` before finishing work
+6. **Knob shows Keypad layout** — Implement `renderKnobState` callback for actions that support Knob; if not provided, BaseAction falls back to Keypad rendering
+7. **didReceiveSettings sends stale data** — StreamDock may send `didReceiveSettings` with outdated data after PI updates settings; BaseAction ignores this if context already has `accessoryId`
 
 ## Reference
 

@@ -14,7 +14,6 @@ const {
   addDialTicks,
   clearDialDebounce,
   markAccessoryUpdated,
-  wasRecentlyUpdated,
   clearUpdateTimestamp,
 } = require('./state');
 const { setImage, sendToPropertyInspector } = require('./websocket');
@@ -24,6 +23,10 @@ const {
   drawConnectingWithIcon,
   drawNotConfiguredWithIcon,
   drawOfflineWithIcon,
+  drawKnobError,
+  drawKnobConnectingWithIcon,
+  drawKnobNotConfiguredWithIcon,
+  drawKnobOfflineWithIcon,
 } = require('./draw-common');
 
 // ============================================================
@@ -171,6 +174,15 @@ const {
  */
 
 /**
+ * Knob state renderer function - renders state to wide knob image (200x100)
+ * @callback RenderKnobStateFn
+ * @param {BaseSettings} settings - Current settings
+ * @param {BaseState} state - Current state
+ * @param {string} displayName - Device display name
+ * @returns {string} - Base64 PNG data URL
+ */
+
+/**
  * Action configuration
  * @typedef {Object} ActionConfig
  * @property {string} actionType - Action UUID (e.g., 'com.isrudoy.spruthub.light')
@@ -178,7 +190,8 @@ const {
  * @property {IconDrawFn} drawIcon - Function to draw the device icon
  * @property {FindServiceFn} findService - Function to find the service in accessory
  * @property {ExtractStateFn} extractState - Function to extract state from accessory
- * @property {RenderStateFn} renderState - Function to render state to button image
+ * @property {RenderStateFn} renderState - Function to render state to button image (144x144)
+ * @property {RenderKnobStateFn} [renderKnobState] - Function to render state to knob image (200x100)
  * @property {KeyHandlerFn} handleKeyUp - Function to handle key press
  * @property {StateChangeHandlerFn} [handleStateChange] - Function to handle state changes
  * @property {SettingsMapperFn} [mapSettings] - Function to map PI payload to settings
@@ -284,6 +297,7 @@ class BaseAction {
     this.findService = config.findService;
     this.extractState = config.extractState;
     this.renderState = config.renderState;
+    this.renderKnobStateFn = config.renderKnobState;
     this.handleKeyUpFn = config.handleKeyUp;
     this.handleStateChangeFn = config.handleStateChange;
     this.mapSettingsFn = config.mapSettings;
@@ -435,22 +449,51 @@ class BaseAction {
    * @returns {void}
    */
   updateButton(context, settings, state) {
+    const ctx = getContext(context);
+    const isKnob = ctx?.controller === 'Knob';
     let imageData;
 
-    if (state?.error) {
-      imageData = drawError(state.error);
-    } else if (state?.connecting) {
-      imageData = drawConnectingWithIcon(this.drawIcon);
-    } else if (!this.isConfigured(settings)) {
-      imageData = drawNotConfiguredWithIcon(this.drawIcon);
-    } else if (state?.offline) {
-      imageData = drawOfflineWithIcon(this.drawIcon, this.getDisplayName(settings));
+    if (isKnob) {
+      // Knob layout (200x100, no status bar)
+      if (state?.error) {
+        imageData = drawKnobError(state.error);
+      } else if (state?.connecting) {
+        imageData = drawKnobConnectingWithIcon(this.drawIcon);
+      } else if (!this.isConfigured(settings)) {
+        imageData = drawKnobNotConfiguredWithIcon(this.drawIcon);
+      } else if (state?.offline) {
+        imageData = drawKnobOfflineWithIcon(this.drawIcon, this.getDisplayName(settings));
+      } else if (this.renderKnobStateFn) {
+        imageData = this.renderKnobStateFn(
+          settings,
+          state || this.initialState,
+          this.getDisplayName(settings)
+        );
+      } else {
+        // Fallback to regular render if no knob-specific renderer
+        imageData = this.renderState(
+          settings,
+          state || this.initialState,
+          this.getDisplayName(settings)
+        );
+      }
     } else {
-      imageData = this.renderState(
-        settings,
-        state || this.initialState,
-        this.getDisplayName(settings)
-      );
+      // Keypad layout (144x144 with status bar)
+      if (state?.error) {
+        imageData = drawError(state.error);
+      } else if (state?.connecting) {
+        imageData = drawConnectingWithIcon(this.drawIcon);
+      } else if (!this.isConfigured(settings)) {
+        imageData = drawNotConfiguredWithIcon(this.drawIcon);
+      } else if (state?.offline) {
+        imageData = drawOfflineWithIcon(this.drawIcon, this.getDisplayName(settings));
+      } else {
+        imageData = this.renderState(
+          settings,
+          state || this.initialState,
+          this.getDisplayName(settings)
+        );
+      }
     }
 
     setImage(context, imageData);
@@ -517,10 +560,13 @@ class BaseAction {
   onWillAppear(context, payload) {
     /** @type {BaseSettings} */
     const settings = /** @type {BaseSettings} */ (payload?.settings || {});
+    /** @type {'Keypad' | 'Knob'} */
+    const controller = payload?.controller || 'Keypad';
     setContext(context, {
       settings,
       action: this.actionType,
       state: { ...this.initialState, connecting: true },
+      controller,
     });
 
     this.updateButton(context, settings, { ...this.initialState, connecting: true });
@@ -728,34 +774,35 @@ class BaseAction {
       ? this.mapSettingsFn(payload)
       : this.defaultMapSettings(payload);
 
-    log(this.logTag, 'Received settings from PI:', settings);
+    log(this.logTag, 'Received settings from PI:', settings.accessoryName);
+
+    // Always reset state and fetch fresh when receiving settings from PI
+    const connectingState = { ...this.initialState, connecting: true };
 
     const ctx = getContext(context);
-    const oldSettings = /** @type {BaseSettings|undefined} */ (ctx?.settings);
-
-    const deviceChanged =
-      !oldSettings ||
-      oldSettings.accessoryId !== settings.accessoryId ||
-      oldSettings.serviceId !== settings.serviceId;
-
     if (ctx) {
       ctx.settings = settings;
+      ctx.state = connectingState;
     } else {
-      setContext(context, { settings, state: { ...this.initialState } });
+      setContext(context, { settings, state: connectingState });
     }
 
-    if (!deviceChanged && ctx?.state) {
-      this.updateButton(context, settings, ctx.state);
-      return;
-    }
+    this.updateButton(context, settings, connectingState);
 
-    this.updateButton(context, settings, { ...this.initialState, connecting: true });
+    const fetchAccessoryId = settings.accessoryId;
+    const fetchServiceId = settings.serviceId;
 
     this.fetchState(settings).then((state) => {
       const c = getContext(context);
-      if (c) {
+      // Only update if device hasn't changed while fetching
+      const currentSettings = /** @type {BaseSettings} */ (c?.settings || {});
+      if (
+        c &&
+        currentSettings.accessoryId === fetchAccessoryId &&
+        currentSettings.serviceId === fetchServiceId
+      ) {
         c.state = state;
-        this.updateButton(context, settings, state);
+        this.updateButton(context, currentSettings, state);
       }
     });
   }
@@ -883,30 +930,51 @@ class BaseAction {
    * @returns {void}
    */
   onSettingsUpdate(context, settings) {
-    const ctx = getContext(context);
+    let ctx = getContext(context);
     const oldSettings = /** @type {BaseSettings|undefined} */ (ctx?.settings);
 
+    // Check if device changed BEFORE updating settings
     const deviceChanged =
       !oldSettings ||
       oldSettings.accessoryId !== settings.accessoryId ||
       oldSettings.serviceId !== settings.serviceId;
 
+    // Store settings
     if (ctx) {
       ctx.settings = settings;
+    } else {
+      setContext(context, { settings, action: this.actionType });
+      ctx = getContext(context);
     }
 
+    // If device didn't change, just update button with existing state
     if (!deviceChanged && ctx?.state) {
       this.updateButton(context, settings, ctx.state);
       return;
     }
 
-    this.updateButton(context, settings, { ...this.initialState, connecting: true });
+    // Device changed - reset state and fetch fresh
+    const connectingState = { ...this.initialState, connecting: true };
+    if (ctx) {
+      ctx.state = connectingState;
+    }
+
+    this.updateButton(context, settings, connectingState);
+
+    const fetchAccessoryId = settings.accessoryId;
+    const fetchServiceId = settings.serviceId;
 
     this.fetchState(settings).then((state) => {
       const c = getContext(context);
-      if (c) {
+      const currentSettings = /** @type {BaseSettings} */ (c?.settings || {});
+      // Only update if device hasn't changed while fetching
+      if (
+        c &&
+        currentSettings.accessoryId === fetchAccessoryId &&
+        currentSettings.serviceId === fetchServiceId
+      ) {
         c.state = state;
-        this.updateButton(context, settings, state);
+        this.updateButton(context, currentSettings, state);
       }
     });
   }
@@ -920,6 +988,19 @@ class BaseAction {
   onDidReceiveSettings(context, payload) {
     /** @type {BaseSettings} */
     const settings = /** @type {BaseSettings} */ (payload?.settings || {});
+
+    const ctx = getContext(context);
+    const currentSettings = /** @type {BaseSettings|undefined} */ (ctx?.settings);
+
+    // If we already have settings with an accessoryId, ignore didReceiveSettings
+    // Settings should only come from:
+    // 1. willAppear (initial load)
+    // 2. sendToPlugin from PI (user changes)
+    // didReceiveSettings from StreamDock can be stale and cause conflicts
+    if (currentSettings?.accessoryId) {
+      return;
+    }
+
     this.onSettingsUpdate(context, settings);
   }
 

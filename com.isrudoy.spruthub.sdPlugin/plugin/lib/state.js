@@ -41,6 +41,7 @@
  * @property {Record<string, unknown>} [settings] - Action settings
  * @property {string} [action] - Action UUID
  * @property {DeviceState} [state] - Current device state
+ * @property {'Keypad' | 'Knob'} [controller] - Controller type (Keypad or Knob)
  */
 
 /**

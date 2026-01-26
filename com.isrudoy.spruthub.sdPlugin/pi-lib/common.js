@@ -612,6 +612,7 @@ function populateServices() {
     return;
   }
 
+  // Multiple services - show dropdown
   showServiceSelect();
 
   const select = /** @type {HTMLSelectElement|null} */ ($dom.serviceSelect);
@@ -626,11 +627,19 @@ function populateServices() {
     select.appendChild(option);
   });
 
+  let serviceRestored = false;
   if (typeof $settings !== 'undefined' && $settings && $settings.serviceId) {
     const savedServiceId = String($settings.serviceId);
     if (matchingServices.some((s) => s.sId === parseInt(savedServiceId))) {
       select.value = savedServiceId;
+      serviceRestored = true;
     }
+  }
+
+  // Auto-select first service if not restored from settings
+  if (!serviceRestored && matchingServices.length > 0) {
+    selectServiceById(matchingServices[0].sId);
+    select.value = String(matchingServices[0].sId);
   }
 }
 
@@ -671,6 +680,9 @@ function selectAccessory() {
   if (typeof $settings !== 'undefined' && $settings) {
     $settings.accessoryId = accessory.id;
     $settings.accessoryName = accessory.name;
+    // Clear service until selected
+    $settings.serviceId = undefined;
+    $settings.serviceName = undefined;
   }
 
   if (deviceConfig?.onAccessorySelected) {
@@ -678,6 +690,8 @@ function selectAccessory() {
     deviceConfig.onAccessorySelected(accessory, matchingServices);
   }
 
+  // populateServices() calls saveSettings() only if there's exactly one service.
+  // Always call it first to handle single-service case.
   populateServices();
 }
 
