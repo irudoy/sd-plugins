@@ -4,15 +4,18 @@
  * @module actions/lock
  */
 
-const { LOCK_ACTION, COLORS } = require('../lib/common');
+const { LOCK_ACTION } = require('../lib/common');
 const { BaseAction, SprutHub, mapBaseSettings } = require('../lib/base-action');
 const {
   createButtonCanvas,
+  createKnobCanvas,
   drawStatusBar,
   drawDeviceName,
   drawStatusText,
   CANVAS_CENTER,
   LAYOUT,
+  KNOB_LAYOUT,
+  COLORS,
 } = require('../lib/draw-common');
 
 // ============================================================
@@ -168,6 +171,80 @@ function renderState(settings, state, name) {
   return canvas.toDataURL('image/png');
 }
 
+/**
+ * Render lock state to knob image (230x144, no status bar)
+ * @param {LockSettings} settings
+ * @param {LockState} state
+ * @param {string} name
+ * @returns {string}
+ */
+function renderKnobState(settings, state, name) {
+  const { canvas, ctx } = createKnobCanvas();
+
+  const iconColor = state.locked ? LOCK_COLORS.locked : LOCK_COLORS.unlocked;
+
+  // Draw icon on left side (slightly higher for lock icon)
+  drawLockIcon(
+    ctx,
+    KNOB_LAYOUT.iconX,
+    KNOB_LAYOUT.iconY - 10,
+    KNOB_LAYOUT.iconSize,
+    iconColor,
+    state.locked
+  );
+
+  // Device name and status - vertically centered
+  ctx.fillStyle = COLORS.white;
+  ctx.font = 'bold 16px sans-serif';
+  ctx.textAlign = 'left';
+  const displayName = name || 'Lock';
+  const maxCharsPerLine = 10;
+  const lineHeight = 18;
+  const statusGap = 8;
+  const centerY = KNOB_LAYOUT.iconY + 5;
+
+  // Parse name into lines
+  let line1 = '';
+  let line2 = '';
+
+  if (displayName.length > maxCharsPerLine) {
+    const words = displayName.split(' ');
+    for (const word of words) {
+      if (line1.length === 0) {
+        line1 = word;
+      } else if ((line1 + ' ' + word).length <= maxCharsPerLine) {
+        line1 += ' ' + word;
+      } else {
+        line2 += (line2 ? ' ' : '') + word;
+      }
+    }
+    if (line2.length > maxCharsPerLine) {
+      line2 = line2.substring(0, maxCharsPerLine - 1) + '…';
+    }
+  } else {
+    line1 = displayName;
+  }
+
+  // Calculate total height and starting Y
+  const hasLine2 = line2.length > 0;
+  const totalHeight = (hasLine2 ? 2 : 1) * lineHeight + statusGap + 20;
+  const startY = centerY - totalHeight / 2 + lineHeight / 2;
+
+  // Draw name
+  ctx.fillText(line1, KNOB_LAYOUT.nameX, startY);
+  if (hasLine2) {
+    ctx.fillText(line2, KNOB_LAYOUT.nameX, startY + lineHeight);
+  }
+
+  // Status text
+  ctx.font = 'bold 20px sans-serif';
+  ctx.fillStyle = iconColor;
+  const statusY = startY + (hasLine2 ? 2 : 1) * lineHeight + statusGap;
+  ctx.fillText(state.locked ? 'Locked' : 'Unlocked', KNOB_LAYOUT.statusX, statusY);
+
+  return canvas.toDataURL('image/png');
+}
+
 // ============================================================
 // Action Configuration
 // ============================================================
@@ -187,6 +264,7 @@ const lockAction = new BaseAction({
   },
 
   renderState,
+  renderKnobState,
 
   handleStateChange: (state, settings, characteristicId, value) => {
     if (

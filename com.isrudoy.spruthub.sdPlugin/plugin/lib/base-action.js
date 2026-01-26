@@ -15,6 +15,7 @@ const {
   clearDialDebounce,
   markAccessoryUpdated,
   clearUpdateTimestamp,
+  wasRecentlyUpdated,
 } = require('./state');
 const { setImage, sendToPropertyInspector } = require('./websocket');
 const { SprutHub, getClient, disconnectClient, getCurrentClient } = require('./spruthub');
@@ -49,6 +50,7 @@ const {
  * @property {string} [serial] - Hub serial
  * @property {number} [accessoryId] - Selected accessory ID
  * @property {string} [accessoryName] - Accessory display name
+ * @property {string} [roomName] - Room name for display
  * @property {number} [serviceId] - Service ID (sId)
  * @property {string} [serviceName] - Service display name
  * @property {number} [characteristicId] - Main characteristic ID (cId)
@@ -216,6 +218,7 @@ function mapBaseSettings(payload) {
     serial: typeof payload.serial === 'string' ? payload.serial : undefined,
     accessoryId: typeof payload.accessoryId === 'number' ? payload.accessoryId : undefined,
     accessoryName: typeof payload.accessoryName === 'string' ? payload.accessoryName : undefined,
+    roomName: typeof payload.roomName === 'string' ? payload.roomName : undefined,
     serviceId: typeof payload.serviceId === 'number' ? payload.serviceId : undefined,
     serviceName: typeof payload.serviceName === 'string' ? payload.serviceName : undefined,
     characteristicId:
@@ -425,6 +428,10 @@ class BaseAction {
   getDisplayName(settings) {
     if (settings.customName) {
       return settings.customName;
+    }
+    // Prefer room name for display (more user-friendly)
+    if (settings.roomName) {
+      return settings.roomName;
     }
     if (settings.serviceName && settings.serviceName !== settings.accessoryName) {
       return settings.serviceName;
@@ -774,7 +781,11 @@ class BaseAction {
       ? this.mapSettingsFn(payload)
       : this.defaultMapSettings(payload);
 
-    log(this.logTag, 'Received settings from PI:', settings.accessoryName);
+    log(this.logTag, 'Received settings from PI:', {
+      accessoryName: settings.accessoryName,
+      roomName: settings.roomName,
+      displayName: this.getDisplayName(settings),
+    });
 
     // Always reset state and fetch fresh when receiving settings from PI
     const connectingState = { ...this.initialState, connecting: true };

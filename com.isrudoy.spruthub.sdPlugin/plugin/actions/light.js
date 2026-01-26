@@ -4,7 +4,7 @@
  * @module actions/light
  */
 
-const { LIGHT_ACTION, COLORS } = require('../lib/common');
+const { LIGHT_ACTION } = require('../lib/common');
 const { BaseAction, SprutHub, mapBaseSettings, handleToggleKeyUp } = require('../lib/base-action');
 const {
   createButtonCanvas,
@@ -14,9 +14,8 @@ const {
   drawStatusText,
   CANVAS_CENTER,
   LAYOUT,
-  KNOB_WIDTH,
-  KNOB_HEIGHT,
   KNOB_LAYOUT,
+  COLORS,
 } = require('../lib/draw-common');
 
 // ============================================================
@@ -140,65 +139,76 @@ function renderState(settings, state, name) {
  * Render light state to knob image (230x144, no status bar)
  * @param {LightSettings} settings
  * @param {LightState} state
- * @param {string} name
+ * @param {string} _name
  * @returns {string}
  */
-function renderKnobState(settings, state, name) {
+function renderKnobState(settings, state, _name) {
   const { canvas, ctx } = createKnobCanvas();
 
   const iconColor = state.on ? COLORS.warmYellow : COLORS.gray;
   const textColor = state.on ? COLORS.white : COLORS.gray;
+  const statusColor = state.on ? COLORS.warmYellow : COLORS.gray;
 
   // Draw icon on left side
   drawLightbulb(ctx, KNOB_LAYOUT.iconX, KNOB_LAYOUT.iconY, KNOB_LAYOUT.iconSize, iconColor);
 
-  // Device name and status - vertically centered relative to icon
-  ctx.fillStyle = textColor;
-  ctx.font = 'bold 16px sans-serif';
+  // Room + Device name (2 lines) + status - centered relative to icon (Y=72)
   ctx.textAlign = 'left';
-  const displayName = name || 'Light';
-  const maxCharsPerLine = 10;
-  const lineHeight = 18;
-  const statusGap = 8;
-  const centerY = KNOB_LAYOUT.iconY + 5; // Center relative to icon, slightly lower
+  const maxChars = 11;
 
-  // Parse name into lines
+  // Parse device name into lines
+  const deviceName = settings.accessoryName || 'Light';
   let line1 = '';
   let line2 = '';
-
-  if (displayName.length > maxCharsPerLine) {
-    const words = displayName.split(' ');
+  if (deviceName.length > maxChars) {
+    const words = deviceName.split(' ');
     for (const word of words) {
       if (line1.length === 0) {
         line1 = word;
-      } else if ((line1 + ' ' + word).length <= maxCharsPerLine) {
+      } else if ((line1 + ' ' + word).length <= maxChars) {
         line1 += ' ' + word;
       } else {
         line2 += (line2 ? ' ' : '') + word;
       }
     }
-    if (line2.length > maxCharsPerLine) {
-      line2 = line2.substring(0, maxCharsPerLine - 1) + '…';
+    if (line2.length > maxChars) {
+      line2 = line2.substring(0, maxChars - 1) + '…';
     }
   } else {
-    line1 = displayName;
+    line1 = deviceName;
   }
 
-  // Calculate total height and starting Y
-  const hasLine2 = line2.length > 0;
-  const totalHeight = (hasLine2 ? 2 : 1) * lineHeight + statusGap + 20; // 20 for status
-  const startY = centerY - totalHeight / 2 + lineHeight / 2;
+  // Calculate total height and center vertically around icon (Y=71)
+  const roomH = 14;
+  const nameH = 20;
+  const statusH = 20;
+  const gapRoomName = 6;
+  const gapNameStatus = 5;
+  const totalHeight = roomH + gapRoomName + nameH + (line2 ? nameH : 0) + gapNameStatus + statusH;
+  const startY = KNOB_LAYOUT.iconY - 2 - totalHeight / 2 + roomH;
 
-  // Draw name
-  ctx.fillText(line1, KNOB_LAYOUT.nameX, startY);
-  if (hasLine2) {
-    ctx.fillText(line2, KNOB_LAYOUT.nameX, startY + lineHeight);
+  // Room name
+  let roomName = settings.roomName || '';
+  if (roomName.length > maxChars) {
+    roomName = roomName.substring(0, maxChars - 1) + '…';
   }
+  ctx.fillStyle = COLORS.gray;
+  ctx.font = 'bold 14px sans-serif';
+  ctx.fillText(roomName, KNOB_LAYOUT.nameX, startY);
 
-  // Status text (brightness or On/Off)
+  // Device name
+  ctx.fillStyle = textColor;
   ctx.font = 'bold 20px sans-serif';
-  ctx.fillStyle = state.on ? COLORS.warmYellow : COLORS.gray;
-  const statusY = startY + (hasLine2 ? 2 : 1) * lineHeight + statusGap;
+  const name1Y = startY + gapRoomName + nameH;
+  ctx.fillText(line1, KNOB_LAYOUT.nameX, name1Y);
+  if (line2) {
+    ctx.fillText(line2, KNOB_LAYOUT.nameX, name1Y + nameH);
+  }
+
+  // Status
+  ctx.font = 'bold 20px sans-serif';
+  ctx.fillStyle = statusColor;
+  const statusY = name1Y + (line2 ? nameH : 0) + gapNameStatus + statusH;
   if (state.on && state.brightness !== undefined) {
     ctx.fillText(state.brightness + '%', KNOB_LAYOUT.statusX, statusY);
   } else {

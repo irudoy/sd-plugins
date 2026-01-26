@@ -159,7 +159,7 @@ Smart home control via Sprut.Hub controller (HomeKit-compatible).
 | Cover | `com.isrudoy.spruthub.cover` | Window covering (blinds/shades) 0-100%, dial rotation |
 | Thermostat | `com.isrudoy.spruthub.thermostat` | Climate control with temperature, dial rotation |
 | Sensor | `com.isrudoy.spruthub.sensor` | Read-only sensors (temp, humidity, motion, contact) |
-| Button | `com.isrudoy.spruthub.button` | Trigger button events (single/double/long press) |
+| Button | `com.isrudoy.spruthub.button` | Trigger button events (single/double/long press), dial actions for Knob |
 | Scenario | `com.isrudoy.spruthub.scenario` | Run Sprut.Hub automation scenarios |
 
 ### Module Structure
@@ -182,7 +182,7 @@ plugin/
     ├── cover.js          # Cover (position 0-100%, dial)
     ├── thermostat.js     # Thermostat (temp, mode, dial)
     ├── sensor.js         # Sensors (temp, humidity, motion, contact)
-    ├── button.js         # Button (single/double/long press)
+    ├── button.js         # Button (single/double/long press, Knob dial actions)
     └── scenario.js       # Scenario (run automation)
 
 pi-lib/                   # Shared Property Inspector code
@@ -243,6 +243,21 @@ The `willAppear` event payload contains `controller: 'Keypad' | 'Knob'` to detec
 
 State is synced across all buttons for the same accessory via `syncAccessoryState()`.
 
+### Action-Specific Display
+
+**Button action (Keypad 144×144):**
+- Line 1: `serviceName` — the button/action name (e.g., "Включить")
+- Line 2: `accessoryName` — the device name (e.g., "Колонки")
+
+**Button action (Knob 230×144):**
+- Name: `accessoryName` — device name
+- Status: dial action names (e.g., "Тише / Включить / Громче") or custom `customStatus`
+- Names from `dialLeftServiceName`, `dialPressServiceName`, `dialRightServiceName`
+
+**Thermostat action (both modes):**
+- Large: current temperature
+- Status: target temp with arrow + mode (e.g., "↑ 25.0° · Heat")
+
 **Adding Knob rendering to an action:**
 
 1. Implement `renderKnobState(ctx, state, settings)` function that draws on 230×144 canvas
@@ -251,24 +266,34 @@ State is synced across all buttons for the same accessory via `syncAccessoryStat
 
 ```javascript
 // Example renderKnobState for light action (light.js)
-function renderKnobState(ctx, state, settings) {
-  const { canvas, ctx: c } = createKnobCanvas();
-  const isOn = state.on;
-  const color = isOn ? COLORS.warmYellow : COLORS.gray;
+function renderKnobState(settings, state, _name) {
+  const { canvas, ctx } = createKnobCanvas();
+  const iconColor = state.on ? COLORS.warmYellow : COLORS.gray;
+  const textColor = state.on ? COLORS.white : COLORS.gray;
 
   // Draw icon on left side
-  drawBulbIcon(c, KNOB_LAYOUT.iconX, KNOB_LAYOUT.iconY, KNOB_LAYOUT.iconSize, color);
+  drawLightbulb(ctx, KNOB_LAYOUT.iconX, KNOB_LAYOUT.iconY, KNOB_LAYOUT.iconSize, iconColor);
 
-  // Draw name and status on right side
-  c.fillStyle = COLORS.white;
-  c.font = '18px Arial';
-  c.textAlign = 'left';
-  c.fillText(settings.displayName || 'Light', KNOB_LAYOUT.nameX, KNOB_LAYOUT.nameY);
+  // Calculate vertical centering (see "Knob text layout" section)
+  ctx.textAlign = 'left';
+  const maxChars = 11;
+  // ... word-wrap device name into line1/line2 ...
+  // ... calculate startY for vertical centering ...
 
-  c.fillStyle = color;
-  c.font = '16px Arial';
-  const statusText = isOn ? `${state.brightness}%` : 'Off';
-  c.fillText(statusText, KNOB_LAYOUT.statusX, KNOB_LAYOUT.statusY);
+  // Room name (gray, small)
+  ctx.fillStyle = COLORS.gray;
+  ctx.font = 'bold 14px sans-serif';
+  ctx.fillText(roomName, KNOB_LAYOUT.nameX, startY);
+
+  // Device name (white, larger, 1-2 lines)
+  ctx.fillStyle = textColor;
+  ctx.font = 'bold 20px sans-serif';
+  ctx.fillText(line1, KNOB_LAYOUT.nameX, name1Y);
+
+  // Status (colored)
+  ctx.fillStyle = iconColor;
+  ctx.font = 'bold 20px sans-serif';
+  ctx.fillText(state.on ? state.brightness + '%' : 'Off', KNOB_LAYOUT.statusX, statusY);
 
   return canvas.toDataURL('image/png');
 }
@@ -296,7 +321,7 @@ WebSocket JSON-RPC protocol over `wss://{host}/bff/`.
 - `WindowCovering` — blinds/shades
 - `Thermostat` — climate control
 - `TemperatureSensor`, `HumiditySensor`, `ContactSensor`, `MotionSensor` — sensors
-- `StatelessProgrammableSwitch` — buttons (doorbell, Aqara buttons)
+- `StatelessProgrammableSwitch` / 89 — buttons (doorbell, Aqara buttons)
 
 **Characteristic values:**
 - `boolValue` — on/off states
@@ -362,7 +387,7 @@ const LAYOUT = {
 };
 ```
 
-**Knob layout constants (common.js):**
+**Knob layout constants (draw-common.js):**
 ```javascript
 const KNOB_WIDTH = 230;
 const KNOB_HEIGHT = 144;
@@ -370,11 +395,27 @@ const KNOB_LAYOUT = {
   iconX: 50,           // Icon center X (left side)
   iconY: 72,           // Icon center Y (vertical center)
   iconSize: 70,        // Icon size
-  nameX: 95,           // Name X position (right side)
-  nameY: 65,           // Name Y position
-  statusX: 95,         // Status text X
-  statusY: 100,        // Status text Y
+  nameX: 95,           // Name/status X position (right side)
+  statusX: 95,         // Status text X (same as nameX)
 };
+```
+
+**Knob text layout (light/cover/button):**
+
+Text on right side is vertically centered relative to icon (Y=72):
+- Line 1: Room name (gray, 14px, bold)
+- Line 2-3: Device name (white, 20px, bold, wraps if > 11 chars)
+- Line 4: Status (colored, 20px, bold)
+
+```javascript
+// Vertical centering calculation in renderKnobState:
+const roomH = 14;
+const nameH = 20;
+const statusH = 20;
+const gapRoomName = 6;
+const gapNameStatus = 5;
+const totalHeight = roomH + gapRoomName + nameH + (line2 ? nameH : 0) + gapNameStatus + statusH;
+const startY = KNOB_LAYOUT.iconY - 2 - totalHeight / 2 + roomH;  // -2px offset for visual balance
 ```
 
 **Note:** Knob layout has no status bar — the wide format uses horizontal layout with icon on left, text on right.
@@ -472,6 +513,15 @@ const $propEvent = SprutHubPI.initDeviceSelection({
 - `SprutHubPI.saveSettings()` — save and send settings to plugin
 - `SprutHubPI.findOnCharacteristic(service)` — find On characteristic
 - `SprutHubPI.getCharType(characteristic)` — get characteristic type
+
+**Cascade selection reset:**
+- When room changes → device and service selectors reset
+- When device changes → service selector resets
+- All related settings (characteristicIds, serviceNames, etc.) are cleared
+
+**Service names from dropdowns:**
+- Use `selectedOptions[0].textContent` to get name from dropdown
+- This works even if `availableButtons` array is empty during restore
 
 **pi-lib/styles.css** — common styles:
 - `.status-message`, `.status-success`, `.status-error`, `.status-info`

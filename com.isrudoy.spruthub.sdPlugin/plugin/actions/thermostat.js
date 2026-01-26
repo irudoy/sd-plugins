@@ -4,9 +4,16 @@
  * @module actions/thermostat
  */
 
-const { THERMOSTAT_ACTION, COLORS } = require('../lib/common');
+const { THERMOSTAT_ACTION } = require('../lib/common');
 const { BaseAction, SprutHub, mapBaseSettings } = require('../lib/base-action');
-const { createButtonCanvas, drawStatusBar, CANVAS_CENTER, LAYOUT } = require('../lib/draw-common');
+const {
+  createButtonCanvas,
+  createKnobCanvas,
+  drawStatusBar,
+  CANVAS_CENTER,
+  KNOB_LAYOUT,
+  COLORS,
+} = require('../lib/draw-common');
 
 // ============================================================
 // Type Definitions
@@ -167,29 +174,80 @@ function renderState(settings, state, name) {
   const fillLevel = Math.min(1, Math.max(0, (currentTemp - 10) / 30));
   drawThermometerIcon(ctx, 30, 45, 50, modeColor, fillLevel);
 
-  // Target temperature (large, right side)
+  // Current temperature (large, right side) - centered with icon
   ctx.fillStyle = COLORS.white;
   ctx.font = 'bold 36px sans-serif';
   ctx.textAlign = 'center';
-  ctx.fillText(`${targetTemp.toFixed(1)}°`, CANVAS_CENTER + 20, 55);
+  ctx.fillText(`${currentTemp.toFixed(1)}°`, CANVAS_CENTER + 20, 60);
 
-  // Current temperature and mode (smaller, below)
+  // Target temperature with arrow + mode (smaller, below)
+  const arrow = targetTemp > currentTemp ? '↑' : targetTemp < currentTemp ? '↓' : '';
   ctx.fillStyle = modeColor;
   ctx.font = 'bold 16px sans-serif';
   ctx.textAlign = 'center';
-  ctx.fillText(`${currentTemp.toFixed(1)}° ${getModeName(mode)}`, CANVAS_CENTER, 85);
+  ctx.fillText(`${arrow} ${targetTemp.toFixed(1)}° · ${getModeName(mode)}`, CANVAS_CENTER, 88);
 
-  // Name
+  // Name - positioned lower for spacing from status
   ctx.fillStyle = COLORS.white;
   ctx.font = 'bold 16px sans-serif';
   let displayName = name;
   if (displayName.length > 14) {
     displayName = displayName.substring(0, 13) + '…';
   }
-  ctx.fillText(displayName, CANVAS_CENTER, LAYOUT.nameY);
+  ctx.fillText(displayName, CANVAS_CENTER, 110);
 
   // Status bar
   drawStatusBar(ctx, modeColor);
+
+  return canvas.toDataURL('image/png');
+}
+
+/**
+ * Render thermostat state to knob image (230x144, no status bar)
+ * @param {ThermostatSettings} settings
+ * @param {ThermostatState} state
+ * @param {string} name
+ * @returns {string}
+ */
+function renderKnobState(settings, state, name) {
+  const { canvas, ctx } = createKnobCanvas();
+  const currentTemp = state.currentTemp ?? 0;
+  const targetTemp = state.targetTemp ?? 0;
+  const mode = state.currentMode ?? 0;
+  const modeColor = getModeColor(mode);
+
+  // Thermometer icon on left side
+  const fillLevel = Math.min(1, Math.max(0, (currentTemp - 10) / 30));
+  drawThermometerIcon(
+    ctx,
+    KNOB_LAYOUT.iconX,
+    KNOB_LAYOUT.iconY,
+    KNOB_LAYOUT.iconSize,
+    modeColor,
+    fillLevel
+  );
+
+  ctx.textAlign = 'left';
+
+  // Current temperature (large) - shifted down
+  ctx.fillStyle = COLORS.white;
+  ctx.font = 'bold 36px sans-serif';
+  ctx.fillText(`${currentTemp.toFixed(1)}°`, KNOB_LAYOUT.nameX, 58);
+
+  // Device name - shifted down
+  ctx.fillStyle = COLORS.white;
+  ctx.font = 'bold 16px sans-serif';
+  let displayName = name || 'Thermostat';
+  if (displayName.length > 14) {
+    displayName = displayName.substring(0, 13) + '…';
+  }
+  ctx.fillText(displayName, KNOB_LAYOUT.nameX, 82);
+
+  // Target temperature with direction arrow + mode - shifted down, larger font
+  const arrow = targetTemp > currentTemp ? '↑' : targetTemp < currentTemp ? '↓' : '';
+  ctx.fillStyle = modeColor;
+  ctx.font = 'bold 18px sans-serif';
+  ctx.fillText(`${arrow} ${targetTemp.toFixed(1)}° · ${getModeName(mode)}`, KNOB_LAYOUT.nameX, 110);
 
   return canvas.toDataURL('image/png');
 }
@@ -221,6 +279,7 @@ const thermostatAction = new BaseAction({
   },
 
   renderState,
+  renderKnobState,
 
   handleStateChange: (state, settings, characteristicId, value) => {
     const newState = { ...state };

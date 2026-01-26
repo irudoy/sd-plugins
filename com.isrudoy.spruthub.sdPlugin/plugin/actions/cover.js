@@ -4,15 +4,18 @@
  * @module actions/cover
  */
 
-const { COVER_ACTION, COLORS } = require('../lib/common');
+const { COVER_ACTION } = require('../lib/common');
 const { BaseAction, SprutHub, mapBaseSettings } = require('../lib/base-action');
 const {
   createButtonCanvas,
+  createKnobCanvas,
   drawStatusBar,
   drawDeviceName,
   drawStatusText,
   CANVAS_CENTER,
   LAYOUT,
+  KNOB_LAYOUT,
+  COLORS,
 } = require('../lib/draw-common');
 
 // ============================================================
@@ -143,6 +146,84 @@ function renderState(settings, state, name) {
   return canvas.toDataURL('image/png');
 }
 
+/**
+ * Render cover state to knob image (230x144, no status bar)
+ * @param {CoverSettings} settings
+ * @param {CoverState} state
+ * @param {string} _name
+ * @returns {string}
+ */
+function renderKnobState(settings, state, _name) {
+  const { canvas, ctx } = createKnobCanvas();
+  const position = state.position ?? 0;
+  const color = getPositionColor(position);
+  const textColor = position <= 5 ? COLORS.gray : COLORS.white;
+
+  // Draw icon on left side
+  drawCoverIcon(ctx, KNOB_LAYOUT.iconX, KNOB_LAYOUT.iconY, KNOB_LAYOUT.iconSize, color, position);
+
+  // Room + Device name (2 lines) + status - centered relative to icon (Y=72)
+  ctx.textAlign = 'left';
+  const maxChars = 11;
+
+  // Parse device name into lines
+  const deviceName = settings.accessoryName || 'Cover';
+  let line1 = '';
+  let line2 = '';
+  if (deviceName.length > maxChars) {
+    const words = deviceName.split(' ');
+    for (const word of words) {
+      if (line1.length === 0) {
+        line1 = word;
+      } else if ((line1 + ' ' + word).length <= maxChars) {
+        line1 += ' ' + word;
+      } else {
+        line2 += (line2 ? ' ' : '') + word;
+      }
+    }
+    if (line2.length > maxChars) {
+      line2 = line2.substring(0, maxChars - 1) + '…';
+    }
+  } else {
+    line1 = deviceName;
+  }
+
+  // Calculate total height and center vertically around icon (Y=71)
+  const roomH = 14;
+  const nameH = 20;
+  const statusH = 20;
+  const gapRoomName = 6;
+  const gapNameStatus = 5;
+  const totalHeight = roomH + gapRoomName + nameH + (line2 ? nameH : 0) + gapNameStatus + statusH;
+  const startY = KNOB_LAYOUT.iconY - 2 - totalHeight / 2 + roomH;
+
+  // Room name
+  let roomName = settings.roomName || '';
+  if (roomName.length > maxChars) {
+    roomName = roomName.substring(0, maxChars - 1) + '…';
+  }
+  ctx.fillStyle = COLORS.gray;
+  ctx.font = 'bold 14px sans-serif';
+  ctx.fillText(roomName, KNOB_LAYOUT.nameX, startY);
+
+  // Device name
+  ctx.fillStyle = textColor;
+  ctx.font = 'bold 20px sans-serif';
+  const name1Y = startY + gapRoomName + nameH;
+  ctx.fillText(line1, KNOB_LAYOUT.nameX, name1Y);
+  if (line2) {
+    ctx.fillText(line2, KNOB_LAYOUT.nameX, name1Y + nameH);
+  }
+
+  // Status
+  ctx.font = 'bold 20px sans-serif';
+  ctx.fillStyle = color;
+  const statusY = name1Y + (line2 ? nameH : 0) + gapNameStatus + statusH;
+  ctx.fillText(getPositionText(position, state.targetPosition), KNOB_LAYOUT.statusX, statusY);
+
+  return canvas.toDataURL('image/png');
+}
+
 // ============================================================
 // Action Configuration
 // ============================================================
@@ -168,6 +249,7 @@ const coverAction = new BaseAction({
   },
 
   renderState,
+  renderKnobState,
 
   handleStateChange: (state, settings, characteristicId, value) => {
     const newState = { ...state };

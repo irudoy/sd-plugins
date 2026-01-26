@@ -5,17 +5,20 @@
  * @module actions/button
  */
 
-const { log, BUTTON_ACTION, COLORS } = require('../lib/common');
+const { log, BUTTON_ACTION } = require('../lib/common');
 const { BaseAction, SprutHub, mapBaseSettings } = require('../lib/base-action');
 const { getContext } = require('../lib/state');
 const { getClient } = require('../lib/spruthub');
 const {
   createButtonCanvas,
+  createKnobCanvas,
   drawStatusBar,
   drawDeviceName,
   drawStatusText,
   CANVAS_CENTER,
   LAYOUT,
+  KNOB_LAYOUT,
+  COLORS,
 } = require('../lib/draw-common');
 
 // ============================================================
@@ -37,14 +40,18 @@ const {
  * @property {string} [serviceName]
  * @property {number} [characteristicId]
  * @property {string} [customName]
+ * @property {string} [customStatus] - Custom status text for knob display
  * @property {number} [pressType] - 0=single, 1=double, 2=long
  * @property {number} [dialLeftServiceId] - Service ID for dial left action
+ * @property {string} [dialLeftServiceName] - Service name for dial left action
  * @property {number} [dialLeftCharId] - Characteristic ID for dial left action
  * @property {number} [dialLeftPressType] - 0=single, 1=double, 2=long
  * @property {number} [dialRightServiceId] - Service ID for dial right action
+ * @property {string} [dialRightServiceName] - Service name for dial right action
  * @property {number} [dialRightCharId] - Characteristic ID for dial right action
  * @property {number} [dialRightPressType] - 0=single, 1=double, 2=long
  * @property {number} [dialPressServiceId] - Service ID for dial press action
+ * @property {string} [dialPressServiceName] - Service name for dial press action
  * @property {number} [dialPressCharId] - Characteristic ID for dial press action
  * @property {number} [dialPressPressType] - 0=single, 1=double, 2=long
  */
@@ -63,13 +70,40 @@ const PRESS_SINGLE = 0;
 const PRESS_DOUBLE = 1;
 const PRESS_LONG = 2;
 
-// Press type names
+// Press type names (kept for potential future use)
 /** @type {Record<number, string>} */
-const PRESS_NAMES = {
+const _PRESS_NAMES = {
   [PRESS_SINGLE]: 'Single',
   [PRESS_DOUBLE]: 'Double',
   [PRESS_LONG]: 'Long',
 };
+
+/**
+ * Build dial actions status string for knob display
+ * Shows configured button names separated by /
+ * @param {ButtonSettings} settings
+ * @returns {string}
+ */
+function buildDialActionsStatus(settings) {
+  const parts = [];
+
+  // Left action
+  if (settings.dialLeftServiceId && settings.dialLeftCharId) {
+    parts.push(settings.dialLeftServiceName || 'Left');
+  }
+
+  // Press action
+  if (settings.dialPressServiceId && settings.dialPressCharId) {
+    parts.push(settings.dialPressServiceName || 'Press');
+  }
+
+  // Right action
+  if (settings.dialRightServiceId && settings.dialRightCharId) {
+    parts.push(settings.dialRightServiceName || 'Right');
+  }
+
+  return parts.length > 0 ? parts.join(' / ') : 'Not configured';
+}
 
 // ============================================================
 // Icon Drawing
@@ -119,13 +153,11 @@ function drawButtonIcon(ctx, x, y, size, color, pressed = false) {
  * Render button state to button image
  * @param {ButtonSettings} settings
  * @param {ButtonState} state
- * @param {string} name
+ * @param {string} _name
  * @returns {string}
  */
-function renderState(settings, state, name) {
+function renderState(settings, state, _name) {
   const { canvas, ctx } = createButtonCanvas();
-  const pressType = settings.pressType ?? PRESS_SINGLE;
-  const pressName = PRESS_NAMES[pressType] || 'Single';
   const isPressed = state.pressed === true;
 
   const iconColor = isPressed ? COLORS.warmYellow : COLORS.white;
@@ -134,14 +166,110 @@ function renderState(settings, state, name) {
   // Button icon
   drawButtonIcon(ctx, CANVAS_CENTER, LAYOUT.bulbY, LAYOUT.bulbSize, iconColor, isPressed);
 
-  // Name
-  drawDeviceName(ctx, name, COLORS.white);
+  // Action name - button/service name (line 1)
+  const actionName = settings.serviceName || 'Button';
+  drawDeviceName(ctx, actionName, COLORS.white);
 
-  // Press type
-  drawStatusText(ctx, pressName, statusColor);
+  // Device name (line 2)
+  const deviceName = settings.accessoryName || '';
+  drawStatusText(ctx, deviceName, statusColor);
 
   // Status bar
   drawStatusBar(ctx, statusColor);
+
+  return canvas.toDataURL('image/png');
+}
+
+/**
+ * Render button state to knob image (230x144, no status bar)
+ * @param {ButtonSettings} settings
+ * @param {ButtonState} state
+ * @param {string} _name
+ * @returns {string}
+ */
+function renderKnobState(settings, state, _name) {
+  const { canvas, ctx } = createKnobCanvas();
+  const isPressed = state.pressed === true;
+
+  const iconColor = isPressed ? COLORS.warmYellow : COLORS.white;
+  const statusColor = isPressed ? COLORS.warmYellow : COLORS.gray;
+
+  // Build status text: custom > dial actions
+  const statusText = settings.customStatus || buildDialActionsStatus(settings);
+
+  // Draw icon on left side
+  drawButtonIcon(
+    ctx,
+    KNOB_LAYOUT.iconX,
+    KNOB_LAYOUT.iconY,
+    KNOB_LAYOUT.iconSize,
+    iconColor,
+    isPressed
+  );
+
+  // Room + Device name (2 lines) + status - centered relative to icon (Y=72)
+  ctx.textAlign = 'left';
+  const maxChars = 11;
+
+  // Parse device name into lines
+  const deviceName = settings.accessoryName || 'Button';
+  let line1 = '';
+  let line2 = '';
+  if (deviceName.length > maxChars) {
+    const words = deviceName.split(' ');
+    for (const word of words) {
+      if (line1.length === 0) {
+        line1 = word;
+      } else if ((line1 + ' ' + word).length <= maxChars) {
+        line1 += ' ' + word;
+      } else {
+        line2 += (line2 ? ' ' : '') + word;
+      }
+    }
+    if (line2.length > maxChars) {
+      line2 = line2.substring(0, maxChars - 1) + '…';
+    }
+  } else {
+    line1 = deviceName;
+  }
+
+  // Calculate total height and center vertically around icon (Y=71)
+  const roomH = 14;
+  const nameH = 20;
+  const statusH = 20;
+  const gapRoomName = 6;
+  const gapNameStatus = 5;
+  const totalHeight = roomH + gapRoomName + nameH + (line2 ? nameH : 0) + gapNameStatus + statusH;
+  const startY = KNOB_LAYOUT.iconY - 2 - totalHeight / 2 + roomH;
+
+  // Room name
+  let roomName = settings.roomName || '';
+  if (roomName.length > maxChars) {
+    roomName = roomName.substring(0, maxChars - 1) + '…';
+  }
+  ctx.fillStyle = COLORS.gray;
+  ctx.font = 'bold 14px sans-serif';
+  ctx.fillText(roomName, KNOB_LAYOUT.nameX, startY);
+
+  // Device name
+  ctx.fillStyle = COLORS.white;
+  ctx.font = 'bold 20px sans-serif';
+  const name1Y = startY + gapRoomName + nameH;
+  ctx.fillText(line1, KNOB_LAYOUT.nameX, name1Y);
+  if (line2) {
+    ctx.fillText(line2, KNOB_LAYOUT.nameX, name1Y + nameH);
+  }
+
+  // Status
+  ctx.font = 'bold 20px sans-serif';
+  ctx.fillStyle = statusColor;
+  const maxStatusChars = 11;
+  const truncatedStatus =
+    statusText.length > maxStatusChars
+      ? statusText.substring(0, maxStatusChars - 1) + '…'
+      : statusText;
+  const statusY = name1Y + (line2 ? nameH : 0) + gapNameStatus + statusH;
+  ctx.fillText(truncatedStatus, KNOB_LAYOUT.statusX, statusY);
 
   return canvas.toDataURL('image/png');
 }
@@ -164,6 +292,7 @@ const buttonAction = new BaseAction({
   },
 
   renderState,
+  renderKnobState,
 
   // Buttons don't have state changes to listen to
   handleStateChange: (state) => state,
@@ -174,15 +303,20 @@ const buttonAction = new BaseAction({
   mapSettings: (payload) => ({
     ...mapBaseSettings(payload),
     pressType: typeof payload.pressType === 'number' ? payload.pressType : PRESS_SINGLE,
+    customStatus: typeof payload.customStatus === 'string' ? payload.customStatus : undefined,
     // Dial Left
     dialLeftServiceId:
       typeof payload.dialLeftServiceId === 'number' ? payload.dialLeftServiceId : undefined,
+    dialLeftServiceName:
+      typeof payload.dialLeftServiceName === 'string' ? payload.dialLeftServiceName : undefined,
     dialLeftCharId: typeof payload.dialLeftCharId === 'number' ? payload.dialLeftCharId : undefined,
     dialLeftPressType:
       typeof payload.dialLeftPressType === 'number' ? payload.dialLeftPressType : PRESS_SINGLE,
     // Dial Right
     dialRightServiceId:
       typeof payload.dialRightServiceId === 'number' ? payload.dialRightServiceId : undefined,
+    dialRightServiceName:
+      typeof payload.dialRightServiceName === 'string' ? payload.dialRightServiceName : undefined,
     dialRightCharId:
       typeof payload.dialRightCharId === 'number' ? payload.dialRightCharId : undefined,
     dialRightPressType:
@@ -190,6 +324,8 @@ const buttonAction = new BaseAction({
     // Dial Press
     dialPressServiceId:
       typeof payload.dialPressServiceId === 'number' ? payload.dialPressServiceId : undefined,
+    dialPressServiceName:
+      typeof payload.dialPressServiceName === 'string' ? payload.dialPressServiceName : undefined,
     dialPressCharId:
       typeof payload.dialPressCharId === 'number' ? payload.dialPressCharId : undefined,
     dialPressPressType:

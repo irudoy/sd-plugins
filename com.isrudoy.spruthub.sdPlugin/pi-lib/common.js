@@ -438,6 +438,7 @@ function sendSettingsToPlugin() {
     serial: globalSettings.serial || '',
     accessoryId: $settings.accessoryId,
     accessoryName: $settings.accessoryName,
+    roomName: $settings.roomName,
     serviceId: $settings.serviceId,
     serviceName: $settings.serviceName,
     customName: $settings.customName,
@@ -548,6 +549,15 @@ function populateDevices() {
   }
 
   if (restored) {
+    // Call onAccessorySelected callback for PIs that need it (e.g., button)
+    if (deviceConfig?.onAccessorySelected) {
+      const accessoryId = select.value;
+      const accessory = devices.find((d) => d.id === parseInt(accessoryId));
+      if (accessory) {
+        const matchingServices = accessory.services?.filter(deviceConfig.isServiceFn) || [];
+        deviceConfig.onAccessorySelected(accessory, matchingServices);
+      }
+    }
     populateServices();
   }
 }
@@ -557,11 +567,40 @@ function populateDevices() {
  */
 function filterDevices() {
   const roomSelect = /** @type {HTMLSelectElement|null} */ ($dom.roomSelect);
+  const deviceSelect = /** @type {HTMLSelectElement|null} */ ($dom.deviceSelect);
+  const serviceSelect = /** @type {HTMLSelectElement|null} */ ($dom.serviceSelect);
   const roomId = roomSelect?.value;
+
+  // Reset downstream selects
+  if (deviceSelect) {
+    deviceSelect.value = '';
+  }
+  if (serviceSelect) {
+    serviceSelect.value = '';
+  }
+  hideServiceSelect();
+
   if (typeof $settings !== 'undefined' && $settings) {
     $settings.roomId = roomId ? parseInt(roomId) : undefined;
+    // Clear device/service selection when room changes
+    $settings.accessoryId = undefined;
+    $settings.accessoryName = undefined;
+    $settings.roomName = undefined;
+    $settings.serviceId = undefined;
+    $settings.serviceName = undefined;
+    // Clear characteristic IDs
+    $settings.characteristicId = undefined;
+    $settings.currentPositionCharId = undefined;
+    $settings.targetPositionCharId = undefined;
+    $settings.currentStateCharId = undefined;
+    $settings.currentTempCharId = undefined;
+    $settings.targetTempCharId = undefined;
+    $settings.currentModeCharId = undefined;
+    $settings.targetModeCharId = undefined;
+    $settings.valueCharId = undefined;
   }
   populateDevices();
+  saveSettings();
 }
 
 // ============================================================
@@ -664,8 +703,18 @@ function selectAccessory() {
     if (typeof $settings !== 'undefined' && $settings) {
       $settings.accessoryId = undefined;
       $settings.accessoryName = undefined;
+      $settings.roomName = undefined;
       $settings.serviceId = undefined;
       $settings.serviceName = undefined;
+      $settings.characteristicId = undefined;
+      $settings.currentPositionCharId = undefined;
+      $settings.targetPositionCharId = undefined;
+      $settings.currentStateCharId = undefined;
+      $settings.currentTempCharId = undefined;
+      $settings.targetTempCharId = undefined;
+      $settings.currentModeCharId = undefined;
+      $settings.targetModeCharId = undefined;
+      $settings.valueCharId = undefined;
     }
     if (deviceConfig?.onAccessorySelected) {
       deviceConfig.onAccessorySelected(null, []);
@@ -677,12 +726,25 @@ function selectAccessory() {
   const accessory = devices.find((d) => d.id === parseInt(accessoryId));
   if (!accessory) return;
 
+  // Find room name
+  const room = accessory.roomId ? rooms.find((r) => r.id === accessory.roomId) : null;
+
   if (typeof $settings !== 'undefined' && $settings) {
     $settings.accessoryId = accessory.id;
     $settings.accessoryName = accessory.name;
-    // Clear service until selected
+    $settings.roomName = room?.name;
+    // Clear service and characteristic IDs until selected
     $settings.serviceId = undefined;
     $settings.serviceName = undefined;
+    $settings.characteristicId = undefined;
+    $settings.currentPositionCharId = undefined;
+    $settings.targetPositionCharId = undefined;
+    $settings.currentStateCharId = undefined;
+    $settings.currentTempCharId = undefined;
+    $settings.targetTempCharId = undefined;
+    $settings.currentModeCharId = undefined;
+    $settings.targetModeCharId = undefined;
+    $settings.valueCharId = undefined;
   }
 
   if (deviceConfig?.onAccessorySelected) {

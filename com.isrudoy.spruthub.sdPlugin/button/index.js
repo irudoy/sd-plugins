@@ -53,6 +53,9 @@ let dialPressPress = null;
 /** @type {HTMLElement|null} */
 let dialPressPressRow = null;
 
+/** @type {HTMLInputElement|null} */
+let customStatus = null;
+
 /** @type {ButtonService[]} */
 let availableButtons = [];
 
@@ -172,6 +175,11 @@ function initElements() {
   }
   if (!dialPressPressRow) {
     dialPressPressRow = document.getElementById('dialPressPressRow');
+  }
+
+  // Custom Status
+  if (!customStatus) {
+    customStatus = /** @type {HTMLInputElement|null} */ (document.getElementById('customStatus'));
   }
 }
 
@@ -352,6 +360,11 @@ function loadExtraSettings() {
     dialPressPress.value = String($settings.dialPressPressType ?? 0);
   }
 
+  // Custom status
+  if (customStatus && $settings.customStatus !== undefined) {
+    customStatus.value = String($settings.customStatus);
+  }
+
   // Populate dropdowns if we have accessory data
   populateAllDropdowns();
 }
@@ -365,35 +378,46 @@ function saveExtraSettings() {
 
   // Main button (uses serviceId/characteristicId for compatibility)
   const mainServiceId = mainButton?.value ? parseInt(mainButton.value) : undefined;
+  const mainBtn = mainServiceId ? availableButtons.find((b) => b.sId === mainServiceId) : null;
+  const mainName = mainButton?.selectedOptions[0]?.textContent;
   $settings.serviceId = mainServiceId;
-  $settings.characteristicId = mainServiceId
-    ? availableButtons.find((b) => b.sId === mainServiceId)?.characteristicId
-    : undefined;
+  $settings.serviceName = mainServiceId ? mainName || mainBtn?.name : undefined;
+  $settings.characteristicId = mainBtn?.characteristicId;
   $settings.pressType = parseInt(mainPress?.value || '0') || 0;
 
-  // Dial Left
+  // Dial Left - get name from selected option text
   const leftServiceId = dialLeftButton?.value ? parseInt(dialLeftButton.value) : undefined;
+  const leftButton = leftServiceId ? availableButtons.find((b) => b.sId === leftServiceId) : null;
+  const leftName = dialLeftButton?.selectedOptions[0]?.textContent;
   $settings.dialLeftServiceId = leftServiceId;
-  $settings.dialLeftCharId = leftServiceId
-    ? availableButtons.find((b) => b.sId === leftServiceId)?.characteristicId
-    : undefined;
+  $settings.dialLeftServiceName = leftServiceId ? leftName || leftButton?.name : undefined;
+  $settings.dialLeftCharId = leftButton?.characteristicId;
   $settings.dialLeftPressType = parseInt(dialLeftPress?.value || '0') || 0;
 
-  // Dial Right
+  // Dial Right - get name from selected option text
   const rightServiceId = dialRightButton?.value ? parseInt(dialRightButton.value) : undefined;
+  const rightButton = rightServiceId
+    ? availableButtons.find((b) => b.sId === rightServiceId)
+    : null;
+  const rightName = dialRightButton?.selectedOptions[0]?.textContent;
   $settings.dialRightServiceId = rightServiceId;
-  $settings.dialRightCharId = rightServiceId
-    ? availableButtons.find((b) => b.sId === rightServiceId)?.characteristicId
-    : undefined;
+  $settings.dialRightServiceName = rightServiceId ? rightName || rightButton?.name : undefined;
+  $settings.dialRightCharId = rightButton?.characteristicId;
   $settings.dialRightPressType = parseInt(dialRightPress?.value || '0') || 0;
 
-  // Dial Press
+  // Dial Press - get name from selected option text
   const pressServiceId = dialPressButton?.value ? parseInt(dialPressButton.value) : undefined;
+  const pressButton = pressServiceId
+    ? availableButtons.find((b) => b.sId === pressServiceId)
+    : null;
+  const pressName = dialPressButton?.selectedOptions[0]?.textContent;
   $settings.dialPressServiceId = pressServiceId;
-  $settings.dialPressCharId = pressServiceId
-    ? availableButtons.find((b) => b.sId === pressServiceId)?.characteristicId
-    : undefined;
+  $settings.dialPressServiceName = pressServiceId ? pressName || pressButton?.name : undefined;
+  $settings.dialPressCharId = pressButton?.characteristicId;
   $settings.dialPressPressType = parseInt(dialPressPress?.value || '0') || 0;
+
+  // Custom status
+  $settings.customStatus = customStatus?.value?.trim() || undefined;
 }
 
 /**
@@ -403,47 +427,50 @@ function saveExtraSettings() {
 function getExtraPluginSettings() {
   initElements();
 
-  // Main button
+  // Main button - get name from selected option text
   const mainServiceId = mainButton?.value ? parseInt(mainButton.value) : undefined;
-  const mainCharId = mainServiceId
-    ? availableButtons.find((b) => b.sId === mainServiceId)?.characteristicId
-    : undefined;
+  const mainBtn = mainServiceId ? availableButtons.find((b) => b.sId === mainServiceId) : null;
+  const mainOptName = mainButton?.selectedOptions[0]?.textContent;
+  const mainCharId = mainBtn?.characteristicId;
 
-  // Dial Left
+  // Dial Left - get name from selected option text
   const leftServiceId = dialLeftButton?.value ? parseInt(dialLeftButton.value) : undefined;
-  const leftCharId = leftServiceId
-    ? availableButtons.find((b) => b.sId === leftServiceId)?.characteristicId
-    : undefined;
+  const leftBtn = leftServiceId ? availableButtons.find((b) => b.sId === leftServiceId) : null;
+  const leftOptName = dialLeftButton?.selectedOptions[0]?.textContent;
 
-  // Dial Right
+  // Dial Right - get name from selected option text
   const rightServiceId = dialRightButton?.value ? parseInt(dialRightButton.value) : undefined;
-  const rightCharId = rightServiceId
-    ? availableButtons.find((b) => b.sId === rightServiceId)?.characteristicId
-    : undefined;
+  const rightBtn = rightServiceId ? availableButtons.find((b) => b.sId === rightServiceId) : null;
+  const rightOptName = dialRightButton?.selectedOptions[0]?.textContent;
 
-  // Dial Press
+  // Dial Press - get name from selected option text
   const pressServiceId = dialPressButton?.value ? parseInt(dialPressButton.value) : undefined;
-  const pressCharId = pressServiceId
-    ? availableButtons.find((b) => b.sId === pressServiceId)?.characteristicId
-    : undefined;
+  const pressBtn = pressServiceId ? availableButtons.find((b) => b.sId === pressServiceId) : null;
+  const pressOptName = dialPressButton?.selectedOptions[0]?.textContent;
 
   return {
     // Main button (uses serviceId/characteristicId for plugin compatibility)
     serviceId: mainServiceId,
+    serviceName: mainServiceId ? mainOptName || mainBtn?.name : undefined,
     characteristicId: mainCharId,
     pressType: parseInt(mainPress?.value || '0') || 0,
     // Dial Left
     dialLeftServiceId: leftServiceId,
-    dialLeftCharId: leftCharId,
+    dialLeftServiceName: leftServiceId ? leftOptName || leftBtn?.name : undefined,
+    dialLeftCharId: leftBtn?.characteristicId,
     dialLeftPressType: parseInt(dialLeftPress?.value || '0') || 0,
     // Dial Right
     dialRightServiceId: rightServiceId,
-    dialRightCharId: rightCharId,
+    dialRightServiceName: rightServiceId ? rightOptName || rightBtn?.name : undefined,
+    dialRightCharId: rightBtn?.characteristicId,
     dialRightPressType: parseInt(dialRightPress?.value || '0') || 0,
     // Dial Press
     dialPressServiceId: pressServiceId,
-    dialPressCharId: pressCharId,
+    dialPressServiceName: pressServiceId ? pressOptName || pressBtn?.name : undefined,
+    dialPressCharId: pressBtn?.characteristicId,
     dialPressPressType: parseInt(dialPressPress?.value || '0') || 0,
+    // Custom status
+    customStatus: customStatus?.value?.trim() || undefined,
   };
 }
 
