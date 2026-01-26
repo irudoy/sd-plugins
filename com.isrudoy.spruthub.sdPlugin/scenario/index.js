@@ -21,9 +21,6 @@ let customName = null;
 /** @type {Array<{index: string, name: string, desc?: string}>} */
 let scenarios = [];
 
-/** @type {ReturnType<typeof SprutHubPI.initConnection>|null} */
-let piInit = null;
-
 // ============================================================
 // Scenario Selection
 // ============================================================
@@ -88,7 +85,7 @@ function populateScenarios(list) {
     if (scenario.desc) {
       option.title = scenario.desc;
     }
-    scenarioSelect?.appendChild(option);
+    scenarioSelect.appendChild(option);
   });
 
   // Restore saved selection
@@ -142,12 +139,9 @@ function handleSendToPI(data) {
 // ============================================================
 
 // Initialize connection settings using shared library
-piInit = SprutHubPI.initConnection({
+const { $propEvent: basePropEvent } = SprutHubPI.initConnection({
   onSendToPropertyInspector: handleSendToPI,
 });
-
-// Wrap $propEvent to add scenario-specific handling
-const basePropEvent = piInit.$propEvent;
 
 // eslint-disable-next-line no-unused-vars
 const $propEvent = {
