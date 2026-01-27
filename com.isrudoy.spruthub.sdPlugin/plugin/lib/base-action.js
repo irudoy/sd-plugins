@@ -56,6 +56,7 @@ const {
  * @property {number} [brightnessCharId] - Brightness characteristic ID (for lights)
  * @property {string} [customName] - Custom display name
  * @property {string} [action] - Action type (toggle, on, off, etc.)
+ * @property {number} [dialDebounceMs] - Dial debounce delay in ms (from PI)
  * @property {number} [currentPositionCharId] - Cover current position char ID
  * @property {number} [targetPositionCharId] - Cover target position char ID
  * @property {number} [currentStateCharId] - Lock current state char ID
@@ -201,6 +202,7 @@ const {
  * @property {DialHandlerFn} [handleDialRotate] - Function to handle dial rotation (knob)
  * @property {PreviewDialFn} [previewDialRotate] - Function to preview dial rotation (UI only, no API)
  * @property {boolean} [useRoomName] - Whether to show room name as display name (default: false)
+ * @property {number} [dialDebounceMs] - Debounce delay for dial API calls in ms (0 = no debounce)
  */
 
 // ============================================================
@@ -226,6 +228,7 @@ function mapBaseSettings(payload) {
       typeof payload.characteristicId === 'number' ? payload.characteristicId : undefined,
     customName: typeof payload.customName === 'string' ? payload.customName : undefined,
     action: typeof payload.action === 'string' ? payload.action : undefined,
+    dialDebounceMs: typeof payload.dialDebounceMs === 'number' ? payload.dialDebounceMs : undefined,
   };
 }
 
@@ -311,6 +314,7 @@ class BaseAction {
     this.handleDialRotateFn = config.handleDialRotate;
     this.previewDialRotateFn = config.previewDialRotate;
     this.useRoomName = config.useRoomName || false;
+    this.dialDebounceMs = config.dialDebounceMs || 0;
 
     /** @type {boolean} */
     this.stateListenerSetup = false;
@@ -712,46 +716,39 @@ class BaseAction {
       if (previewState) {
         ctx.state = previewState;
         this.updateButton(context, settings, previewState);
-        this.syncAccessoryState(context, settings, previewState); // Sync to other buttons
+        this.syncAccessoryState(context, settings, previewState);
       }
     }
 
-    // Accumulate ticks and debounce API call
-    addDialTicks(
-      context,
-      payload.ticks,
-      async (totalTicks) => {
-        try {
-          const client = getClient(
-            settings.host || '',
-            settings.token || '',
-            settings.serial || ''
-          );
-          if (!client || !client.isConnected()) {
-            log(this.logTag, 'onDialRotate: client not connected');
-            return;
-          }
-
-          const currentCtx = getContext(context);
-          const currentState = currentCtx?.state || { ...this.initialState };
-
-          log(this.logTag, 'onDialRotate: sending to hub, ticks:', totalTicks);
-
-          // Send accumulated change to hub
-          await this.handleDialRotateFn?.(client, settings, currentState, {
-            ticks: totalTicks,
-          });
-
-          // Extend cooldown after API call (state already synced by preview)
-          if (settings.accessoryId) {
-            markAccessoryUpdated(settings.accessoryId);
-          }
-        } catch (err) {
-          log(this.logTag, 'Error in dialRotate:', err);
+    // Send to hub - with debounce if configured, otherwise immediate
+    /** @param {number} ticks */
+    const sendToHub = async (ticks) => {
+      try {
+        const client = getClient(settings.host || '', settings.token || '', settings.serial || '');
+        if (!client || !client.isConnected()) {
+          log(this.logTag, 'onDialRotate: client not connected');
+          return;
         }
-      },
-      150 // 150ms debounce for API calls
-    );
+
+        const currentCtx = getContext(context);
+        const currentState = currentCtx?.state || { ...this.initialState };
+
+        await this.handleDialRotateFn?.(client, settings, currentState, { ticks });
+
+        if (settings.accessoryId) {
+          markAccessoryUpdated(settings.accessoryId);
+        }
+      } catch (err) {
+        log(this.logTag, 'Error in dialRotate:', err);
+      }
+    };
+
+    const debounceMs = settings.dialDebounceMs ?? this.dialDebounceMs;
+    if (debounceMs > 0) {
+      addDialTicks(context, payload.ticks, sendToHub, debounceMs);
+    } else {
+      sendToHub(payload.ticks);
+    }
   }
 
   /**

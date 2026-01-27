@@ -58,28 +58,50 @@ function findCharacteristics(service) {
 
 /** @type {HTMLInputElement|null} */
 let tempStepInput = null;
+/** @type {HTMLInputElement|null} */
+let dialDebounceInput = null;
 
 /**
- * Load extra settings (tempStep)
+ * Load extra settings
  */
 function loadExtraSettings() {
   if (!tempStepInput) {
     tempStepInput = /** @type {HTMLInputElement|null} */ (document.getElementById('tempStep'));
   }
-  if (tempStepInput && typeof $settings !== 'undefined' && $settings?.tempStep !== undefined) {
-    tempStepInput.value = String($settings.tempStep);
+  if (!dialDebounceInput) {
+    dialDebounceInput = /** @type {HTMLInputElement|null} */ (
+      document.getElementById('dialDebounceMs')
+    );
+  }
+  if (typeof $settings !== 'undefined' && $settings) {
+    if (tempStepInput && $settings.tempStep !== undefined) {
+      tempStepInput.value = String($settings.tempStep);
+    }
+    if (dialDebounceInput && $settings.dialDebounceMs !== undefined) {
+      dialDebounceInput.value = String($settings.dialDebounceMs);
+    }
   }
 }
 
 /**
- * Save extra settings (tempStep)
+ * Save extra settings
  */
 function saveExtraSettings() {
   if (!tempStepInput) {
     tempStepInput = /** @type {HTMLInputElement|null} */ (document.getElementById('tempStep'));
   }
+  if (!dialDebounceInput) {
+    dialDebounceInput = /** @type {HTMLInputElement|null} */ (
+      document.getElementById('dialDebounceMs')
+    );
+  }
   if (typeof $settings !== 'undefined' && $settings) {
     $settings.tempStep = parseFloat(tempStepInput?.value || '0.5') || 0.5;
+    const debounceVal = parseInt(dialDebounceInput?.value || '', 10);
+    // Only save if explicitly set, otherwise let action default (150) take over
+    if (!isNaN(debounceVal) && debounceVal >= 0) {
+      $settings.dialDebounceMs = debounceVal;
+    }
   }
 }
 
@@ -91,9 +113,19 @@ function getExtraPluginSettings() {
   if (!tempStepInput) {
     tempStepInput = /** @type {HTMLInputElement|null} */ (document.getElementById('tempStep'));
   }
-  return {
+  if (!dialDebounceInput) {
+    dialDebounceInput = /** @type {HTMLInputElement|null} */ (
+      document.getElementById('dialDebounceMs')
+    );
+  }
+  const result = {
     tempStep: parseFloat(tempStepInput?.value || '0.5') || 0.5,
   };
+  const debounceVal = parseInt(dialDebounceInput?.value || '', 10);
+  if (!isNaN(debounceVal) && debounceVal >= 0) {
+    result.dialDebounceMs = debounceVal;
+  }
+  return result;
 }
 
 // Initialize PI with configuration

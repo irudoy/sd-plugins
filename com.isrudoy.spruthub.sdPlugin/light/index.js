@@ -36,9 +36,11 @@ function findCharacteristics(service) {
 
 /** @type {HTMLSelectElement|null} */
 let brightnessStepSelect = null;
+/** @type {HTMLInputElement|null} */
+let dialDebounceInput = null;
 
 /**
- * Load extra settings (brightnessStep)
+ * Load extra settings
  */
 function loadExtraSettings() {
   if (!brightnessStepSelect) {
@@ -46,17 +48,23 @@ function loadExtraSettings() {
       document.getElementById('brightnessStep')
     );
   }
-  if (
-    brightnessStepSelect &&
-    typeof $settings !== 'undefined' &&
-    $settings?.brightnessStep !== undefined
-  ) {
-    brightnessStepSelect.value = String($settings.brightnessStep);
+  if (!dialDebounceInput) {
+    dialDebounceInput = /** @type {HTMLInputElement|null} */ (
+      document.getElementById('dialDebounceMs')
+    );
+  }
+  if (typeof $settings !== 'undefined' && $settings) {
+    if (brightnessStepSelect && $settings.brightnessStep !== undefined) {
+      brightnessStepSelect.value = String($settings.brightnessStep);
+    }
+    if (dialDebounceInput && $settings.dialDebounceMs !== undefined) {
+      dialDebounceInput.value = String($settings.dialDebounceMs);
+    }
   }
 }
 
 /**
- * Save extra settings (brightnessStep)
+ * Save extra settings
  */
 function saveExtraSettings() {
   if (!brightnessStepSelect) {
@@ -64,8 +72,15 @@ function saveExtraSettings() {
       document.getElementById('brightnessStep')
     );
   }
+  if (!dialDebounceInput) {
+    dialDebounceInput = /** @type {HTMLInputElement|null} */ (
+      document.getElementById('dialDebounceMs')
+    );
+  }
   if (typeof $settings !== 'undefined' && $settings) {
     $settings.brightnessStep = parseInt(brightnessStepSelect?.value || '10', 10) || 10;
+    const debounceVal = parseInt(dialDebounceInput?.value || '0', 10);
+    $settings.dialDebounceMs = debounceVal >= 0 ? debounceVal : 0;
   }
 }
 
@@ -79,8 +94,15 @@ function getExtraPluginSettings() {
       document.getElementById('brightnessStep')
     );
   }
+  if (!dialDebounceInput) {
+    dialDebounceInput = /** @type {HTMLInputElement|null} */ (
+      document.getElementById('dialDebounceMs')
+    );
+  }
+  const debounceVal = parseInt(dialDebounceInput?.value || '0', 10);
   return {
     brightnessStep: parseInt(brightnessStepSelect?.value || '10', 10) || 10,
+    dialDebounceMs: debounceVal >= 0 ? debounceVal : 0,
   };
 }
 

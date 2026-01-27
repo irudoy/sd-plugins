@@ -261,6 +261,7 @@ const thermostatAction = new BaseAction({
   deviceTypeName: 'Thermostat',
   drawIcon: (ctx, x, y, size, color) => drawThermometerIcon(ctx, x, y, size, color, 0.5),
   initialState: { currentTemp: 0, targetTemp: 0, currentMode: 0, targetMode: 0 },
+  dialDebounceMs: 150,
 
   findService: (accessory) => SprutHub.findThermostatService(accessory),
 

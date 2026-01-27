@@ -75,6 +75,12 @@
                 <option value="25">25%</option>
             </select>
         </div>
+
+        <!-- Dial Debounce -->
+        <div class="sdpi-item">
+            <div class="sdpi-item-label">Dial Debounce</div>
+            <input class="sdpi-item-value" type="number" id="dialDebounceMs" min="0" max="500" step="50" placeholder="0" onchange="SprutHubPI.saveSettings()">
+        </div>
     </div>
 
     <script src="../static/sd-action.js"></script>
