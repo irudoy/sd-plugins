@@ -36,6 +36,7 @@ const {
  * @property {string} [serial]
  * @property {number} [accessoryId]
  * @property {string} [accessoryName]
+ * @property {string} [roomName]
  * @property {number} [serviceId]
  * @property {string} [serviceName]
  * @property {number} [characteristicId]

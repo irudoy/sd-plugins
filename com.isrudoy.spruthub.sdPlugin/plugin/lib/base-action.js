@@ -15,7 +15,8 @@ const {
   clearDialDebounce,
   markAccessoryUpdated,
   clearUpdateTimestamp,
-  wasRecentlyUpdated,
+  cacheState,
+  getCachedState,
 } = require('./state');
 const { setImage, sendToPropertyInspector } = require('./websocket');
 const { SprutHub, getClient, disconnectClient, getCurrentClient } = require('./spruthub');
@@ -23,11 +24,9 @@ const {
   drawError,
   drawConnectingWithIcon,
   drawNotConfiguredWithIcon,
-  drawOfflineWithIcon,
   drawKnobError,
   drawKnobConnectingWithIcon,
   drawKnobNotConfiguredWithIcon,
-  drawKnobOfflineWithIcon,
 } = require('./draw-common');
 
 // ============================================================
@@ -54,6 +53,7 @@ const {
  * @property {number} [serviceId] - Service ID (sId)
  * @property {string} [serviceName] - Service display name
  * @property {number} [characteristicId] - Main characteristic ID (cId)
+ * @property {number} [brightnessCharId] - Brightness characteristic ID (for lights)
  * @property {string} [customName] - Custom display name
  * @property {string} [action] - Action type (toggle, on, off, etc.)
  * @property {number} [currentPositionCharId] - Cover current position char ID
@@ -200,6 +200,7 @@ const {
  * @property {BaseState} initialState - Initial state object
  * @property {DialHandlerFn} [handleDialRotate] - Function to handle dial rotation (knob)
  * @property {PreviewDialFn} [previewDialRotate] - Function to preview dial rotation (UI only, no API)
+ * @property {boolean} [useRoomName] - Whether to show room name as display name (default: false)
  */
 
 // ============================================================
@@ -263,7 +264,9 @@ async function handleToggleKeyUp(client, settings, currentState) {
  * @returns {BaseState} - Updated state
  */
 function handleOnOffStateChange(state, settings, characteristicId, value) {
-  if (settings.characteristicId === characteristicId || characteristicId === SprutHub.CHAR_ON) {
+  // Only update if this is the On characteristic we're tracking
+  // Note: CHAR_ON (37) is a type constant, not an ID - we must use settings.characteristicId
+  if (settings.characteristicId === characteristicId) {
     return { ...state, on: Boolean(value) };
   }
   return state;
@@ -307,6 +310,7 @@ class BaseAction {
     this.initialState = config.initialState;
     this.handleDialRotateFn = config.handleDialRotate;
     this.previewDialRotateFn = config.previewDialRotate;
+    this.useRoomName = config.useRoomName || false;
 
     /** @type {boolean} */
     this.stateListenerSetup = false;
@@ -361,12 +365,6 @@ class BaseAction {
         /** @type {BaseSettings} */
         const settings = /** @type {BaseSettings} */ (data.settings || {});
         if (settings.accessoryId === accessoryId) {
-          // Skip state updates if we recently made a change (optimistic UI)
-          if (wasRecentlyUpdated(context)) {
-            log(this.logTag, 'Skipping stateChange (optimistic UI cooldown)');
-            return;
-          }
-
           if (!data.state) {
             data.state = { ...this.initialState };
           }
@@ -382,6 +380,11 @@ class BaseAction {
           }
 
           this.updateButton(context, settings, data.state);
+
+          // Cache state for page switch restoration (keyed by actionType + accessoryId)
+          if (settings.accessoryId && data.state) {
+            cacheState(this.actionType, settings.accessoryId, data.state);
+          }
         }
       });
     });
@@ -429,13 +432,15 @@ class BaseAction {
     if (settings.customName) {
       return settings.customName;
     }
-    // Prefer room name for display (more user-friendly)
-    if (settings.roomName) {
+    // Some actions prefer room name (e.g., lights)
+    if (this.useRoomName && settings.roomName) {
       return settings.roomName;
     }
+    // Show service name if it differs from accessory name (e.g., multi-switch devices)
     if (settings.serviceName && settings.serviceName !== settings.accessoryName) {
       return settings.serviceName;
     }
+    // Show accessory name as default
     return settings.accessoryName || this.deviceTypeName;
   }
 
@@ -468,8 +473,6 @@ class BaseAction {
         imageData = drawKnobConnectingWithIcon(this.drawIcon);
       } else if (!this.isConfigured(settings)) {
         imageData = drawKnobNotConfiguredWithIcon(this.drawIcon);
-      } else if (state?.offline) {
-        imageData = drawKnobOfflineWithIcon(this.drawIcon, this.getDisplayName(settings));
       } else if (this.renderKnobStateFn) {
         imageData = this.renderKnobStateFn(
           settings,
@@ -492,8 +495,6 @@ class BaseAction {
         imageData = drawConnectingWithIcon(this.drawIcon);
       } else if (!this.isConfigured(settings)) {
         imageData = drawNotConfiguredWithIcon(this.drawIcon);
-      } else if (state?.offline) {
-        imageData = drawOfflineWithIcon(this.drawIcon, this.getDisplayName(settings));
       } else {
         imageData = this.renderState(
           settings,
@@ -569,20 +570,46 @@ class BaseAction {
     const settings = /** @type {BaseSettings} */ (payload?.settings || {});
     /** @type {'Keypad' | 'Knob'} */
     const controller = payload?.controller || 'Keypad';
+
+    // Try to use cached state to prevent flash when switching StreamDock pages
+    // Key by actionType + accessoryId to avoid cache collisions between different device types
+    const cachedState = settings.accessoryId
+      ? getCachedState(this.actionType, settings.accessoryId)
+      : undefined;
+
+    log(this.logTag, 'onWillAppear:', {
+      accessoryId: settings.accessoryId,
+      hasCachedState: !!cachedState,
+    });
+
+    let initialState;
+    if (cachedState) {
+      // Use cached state - no flash on page switch
+      initialState = { ...cachedState };
+    } else {
+      // No cache - show "Connecting..." while fetching
+      initialState = { ...this.initialState, connecting: true };
+    }
+
     setContext(context, {
       settings,
       action: this.actionType,
-      state: { ...this.initialState, connecting: true },
+      state: initialState,
       controller,
     });
 
-    this.updateButton(context, settings, { ...this.initialState, connecting: true });
+    this.updateButton(context, settings, initialState);
 
     this.fetchState(settings).then((state) => {
       const ctx = getContext(context);
       if (ctx) {
         ctx.state = state;
         this.updateButton(context, settings, state);
+        // Cache state for future page switches (keyed by actionType + accessoryId)
+        if (settings.accessoryId) {
+          log(this.logTag, 'Caching state for', settings.accessoryId, ':', state);
+          cacheState(this.actionType, settings.accessoryId, state);
+        }
       }
     });
   }
@@ -600,6 +627,7 @@ class BaseAction {
 
     if (Object.keys(contexts).length === 0) {
       disconnectClient();
+      // Don't clear state cache - keep it for when user returns to this page
       this.stateListenerSetup = false;
       this.listenerClient = null;
     }

@@ -1050,7 +1050,6 @@ class SprutHub {
 
     log('[SprutHub] Updating characteristic:', { aId, sId, cId, value: formattedValue });
 
-    // Try flat structure without characteristics array
     return this.send({
       characteristic: {
         update: {

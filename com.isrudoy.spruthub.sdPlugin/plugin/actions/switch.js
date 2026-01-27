@@ -101,15 +101,20 @@ function drawSwitchIcon(ctx, x, y, size, color, isOn = false) {
  */
 function renderState(settings, state, name) {
   const { canvas, ctx } = createButtonCanvas();
+  const isOffline = state.offline;
 
   if (state.on) {
-    drawSwitchIcon(ctx, CANVAS_CENTER, LAYOUT.bulbY, LAYOUT.bulbSize, COLORS.warmYellow, true);
-    drawDeviceName(ctx, name, COLORS.white);
-    drawStatusText(ctx, 'On', COLORS.warmYellow);
-    drawStatusBar(ctx, COLORS.warmYellow);
+    const color = isOffline ? COLORS.gray : COLORS.warmYellow;
+    drawSwitchIcon(ctx, CANVAS_CENTER, LAYOUT.bulbY, LAYOUT.bulbSize, color, true);
+    drawDeviceName(ctx, name, isOffline ? COLORS.gray : COLORS.white);
+    drawStatusText(ctx, isOffline ? 'On · Offline' : 'On', color);
+    drawStatusBar(ctx, color);
   } else {
     drawSwitchIcon(ctx, CANVAS_CENTER, LAYOUT.bulbY, LAYOUT.bulbSize, COLORS.gray, false);
-    drawDeviceName(ctx, name, COLORS.gray, LAYOUT.nameYOff);
+    drawDeviceName(ctx, name, COLORS.gray, isOffline ? LAYOUT.nameY : LAYOUT.nameYOff);
+    if (isOffline) {
+      drawStatusText(ctx, 'Offline', COLORS.gray);
+    }
     drawStatusBar(ctx, '#444444');
   }
 
@@ -125,9 +130,10 @@ function renderState(settings, state, name) {
  */
 function renderKnobState(settings, state, name) {
   const { canvas, ctx } = createKnobCanvas();
+  const isOffline = state.offline;
 
-  const iconColor = state.on ? COLORS.warmYellow : COLORS.gray;
-  const textColor = state.on ? COLORS.white : COLORS.gray;
+  const iconColor = state.on ? (isOffline ? COLORS.gray : COLORS.warmYellow) : COLORS.gray;
+  const textColor = state.on ? (isOffline ? COLORS.gray : COLORS.white) : COLORS.gray;
 
   // Draw icon on left side
   drawSwitchIcon(
@@ -184,9 +190,15 @@ function renderKnobState(settings, state, name) {
 
   // Status text
   ctx.font = 'bold 20px sans-serif';
-  ctx.fillStyle = state.on ? COLORS.warmYellow : COLORS.gray;
+  ctx.fillStyle = iconColor;
   const statusY = startY + (hasLine2 ? 2 : 1) * lineHeight + statusGap;
-  ctx.fillText(state.on ? 'On' : 'Off', KNOB_LAYOUT.statusX, statusY);
+  let statusText;
+  if (state.on) {
+    statusText = isOffline ? 'On · Offline' : 'On';
+  } else {
+    statusText = isOffline ? 'Offline' : 'Off';
+  }
+  ctx.fillText(statusText, KNOB_LAYOUT.statusX, statusY);
 
   return canvas.toDataURL('image/png');
 }

@@ -33,6 +33,7 @@ const {
  * @property {string} [serial]
  * @property {number} [accessoryId]
  * @property {string} [accessoryName]
+ * @property {string} [roomName]
  * @property {number} [serviceId]
  * @property {string} [serviceName]
  * @property {number} [targetPositionCharId] - TargetPosition characteristic ID
@@ -114,8 +115,9 @@ function getPositionColor(position) {
  */
 function getPositionText(position, targetPosition) {
   if (targetPosition !== undefined && Math.abs(position - targetPosition) > 2) {
-    if (targetPosition > position) return 'Closing...';
-    return 'Opening...';
+    // target > current = moving to higher position = opening (in HomeKit 100=open)
+    if (targetPosition > position) return 'Opening...';
+    return 'Closing...';
   }
   if (position >= 95) return 'Open';
   if (position <= 5) return 'Closed';

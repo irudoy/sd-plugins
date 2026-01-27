@@ -21,14 +21,16 @@ function isLightbulbService(service) {
 }
 
 /**
- * Find On characteristic in service
+ * Find On and Brightness characteristics in service
  * @param {import('../pi-lib/common').PIService} service
  * @returns {Record<string, number|undefined>}
  */
 function findCharacteristics(service) {
   const onChar = SprutHubPI.findOnCharacteristic(service);
+  const brightnessChar = SprutHubPI.findBrightnessCharacteristic(service);
   return {
     characteristicId: onChar?.cId,
+    brightnessCharId: brightnessChar?.cId,
   };
 }
 

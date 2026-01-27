@@ -4,7 +4,7 @@
  * @module actions/light
  */
 
-const { LIGHT_ACTION } = require('../lib/common');
+const { LIGHT_ACTION, log } = require('../lib/common');
 const { BaseAction, SprutHub, mapBaseSettings, handleToggleKeyUp } = require('../lib/base-action');
 const {
   createButtonCanvas,
@@ -34,9 +34,11 @@ const {
  * @property {string} [serial]
  * @property {number} [accessoryId]
  * @property {string} [accessoryName]
+ * @property {string} [roomName]
  * @property {number} [serviceId]
  * @property {string} [serviceName]
- * @property {number} [characteristicId]
+ * @property {number} [characteristicId] - On characteristic ID
+ * @property {number} [brightnessCharId] - Brightness characteristic ID
  * @property {string} [customName]
  * @property {string} [action] - toggle | on | off
  * @property {number} [brightnessStep] - Brightness change step (default 10)
@@ -227,6 +229,7 @@ const lightAction = new BaseAction({
   deviceTypeName: 'Light',
   drawIcon: drawLightbulb,
   initialState: { on: false },
+  useRoomName: true,
 
   findService: (accessory) => SprutHub.findLightbulbService(accessory),
 
@@ -249,10 +252,19 @@ const lightAction = new BaseAction({
   handleStateChange: (state, settings, characteristicId, value) => {
     const newState = { ...state };
 
-    if (settings.characteristicId === characteristicId || characteristicId === SprutHub.CHAR_ON) {
+    log('[Light] handleStateChange:', {
+      characteristicId,
+      value,
+      'settings.characteristicId': settings.characteristicId,
+      'settings.brightnessCharId': settings.brightnessCharId,
+    });
+
+    if (settings.characteristicId === characteristicId) {
       newState.on = Boolean(value);
-    } else if (characteristicId === SprutHub.CHAR_BRIGHTNESS) {
+      log('[Light] Updated ON state to:', newState.on);
+    } else if (settings.brightnessCharId === characteristicId) {
       newState.brightness = Number(value);
+      log('[Light] Updated brightness to:', newState.brightness);
     }
 
     return newState;
@@ -332,10 +344,20 @@ const lightAction = new BaseAction({
     return currentState;
   },
 
-  mapSettings: (payload) => ({
-    ...mapBaseSettings(payload),
-    brightnessStep: typeof payload.brightnessStep === 'number' ? payload.brightnessStep : undefined,
-  }),
+  mapSettings: (payload) => {
+    const settings = {
+      ...mapBaseSettings(payload),
+      brightnessCharId:
+        typeof payload.brightnessCharId === 'number' ? payload.brightnessCharId : undefined,
+      brightnessStep:
+        typeof payload.brightnessStep === 'number' ? payload.brightnessStep : undefined,
+    };
+    log('[Light] mapSettings:', {
+      'payload.brightnessCharId': payload.brightnessCharId,
+      'settings.brightnessCharId': settings.brightnessCharId,
+    });
+    return settings;
+  },
 });
 
 // ============================================================

@@ -447,6 +447,7 @@ function sendSettingsToPlugin() {
 
   const charIdKeys = [
     'characteristicId',
+    'brightnessCharId',
     'currentPositionCharId',
     'targetPositionCharId',
     'currentStateCharId',
@@ -645,13 +646,7 @@ function populateServices() {
     return;
   }
 
-  if (matchingServices.length === 1) {
-    hideServiceSelect();
-    selectServiceById(matchingServices[0].sId);
-    return;
-  }
-
-  // Multiple services - show dropdown
+  // Always show dropdown so user can see what's selected
   showServiceSelect();
 
   const select = /** @type {HTMLSelectElement|null} */ ($dom.serviceSelect);
@@ -836,8 +831,15 @@ function handleDidReceiveGlobalSettingsConnection(data) {
     if (globalSettings.serial) $settings.serial = globalSettings.serial;
   }
 
+  const hasCredentials = globalSettings.host && globalSettings.token && globalSettings.serial;
+
   // Show "Configured" (not "Connected") - actual connection status updated after test
   updateConnectionStatus(false, globalSettings.host);
+
+  // Auto-collapse connection settings if already configured
+  if (hasCredentials && connectionSettingsVisible) {
+    toggleConnectionSettings();
+  }
 }
 
 /**
@@ -860,6 +862,11 @@ function handleDidReceiveGlobalSettingsWithDevices(data) {
     updateConnectionStatus(true, globalSettings.host);
   } else if (!hasCredentials) {
     updateConnectionStatus(false);
+  }
+
+  // Auto-collapse connection settings if already configured
+  if (hasCredentials && connectionSettingsVisible) {
+    toggleConnectionSettings();
   }
 
   if (!devicesLoaded && hasCredentials) {
@@ -890,9 +897,7 @@ function handleSendToPIConnection(data) {
         showStatus('Connection successful!', 'success');
         saveGlobalSettings();
         updateConnectionStatus(true, getInputValue($dom.host));
-        if (connectionSettingsVisible) {
-          toggleConnectionSettings();
-        }
+        // Don't auto-collapse - let user collapse manually
       } else {
         showStatus('Error: ' + (data.error || 'Unknown error'), 'error');
         updateConnectionStatus(false);
@@ -904,9 +909,7 @@ function handleSendToPIConnection(data) {
       if (data.status === 'success') {
         showStatus(/** @type {string} */ (data.message) || 'Connected', 'success');
         updateConnectionStatus(true, getInputValue($dom.host));
-        if (connectionSettingsVisible) {
-          toggleConnectionSettings();
-        }
+        // Don't auto-collapse - let user collapse manually
       } else if (data.status === 'error') {
         showStatus(/** @type {string} */ (data.message) || 'Connection failed', 'error');
       } else if (data.status === 'connecting') {
@@ -952,9 +955,7 @@ function handleSendToPIWithDevices(data) {
         populateDevices();
         saveGlobalSettings();
         updateConnectionStatus(true, getInputValue($dom.host));
-        if (connectionSettingsVisible) {
-          toggleConnectionSettings();
-        }
+        // Don't auto-collapse - let user collapse manually
       } else {
         showStatus('Error: ' + (data.error || 'Unknown error'), 'error');
         updateConnectionStatus(false);
@@ -1081,6 +1082,21 @@ function findOnCharacteristic(service) {
   return onChar;
 }
 
+/**
+ * Find Brightness characteristic in service
+ * @param {PIService} service
+ * @returns {PICharacteristic|undefined}
+ */
+function findBrightnessCharacteristic(service) {
+  const CHAR_TYPE_BRIGHTNESS = 38;
+  const CHAR_TYPE_BRIGHTNESS_NAMES = ['Brightness'];
+
+  return service.characteristics?.find((c) => {
+    const type = getCharType(c);
+    return type === CHAR_TYPE_BRIGHTNESS || CHAR_TYPE_BRIGHTNESS_NAMES.includes(String(type));
+  });
+}
+
 // ============================================================
 // Public API: Initialization Functions
 // ============================================================
@@ -1144,6 +1160,7 @@ window.SprutHubPI = {
   getCharType,
   isBooleanCharacteristic,
   findOnCharacteristic,
+  findBrightnessCharacteristic,
   getConnectionSettings,
 
   // Accessors

@@ -69,6 +69,9 @@ const pendingDialTicks = {};
 /** @type {Record<string, number>} */
 const lastUpdateTimestamps = {};
 
+/** @type {Record<string, DeviceState>} */
+const stateCache = {};
+
 /** @type {string|null} */
 let currentPIAction = null;
 
@@ -219,10 +222,10 @@ function markAccessoryUpdated(accessoryId) {
 /**
  * Check if context was recently updated (within cooldown period)
  * @param {string} context - Context ID
- * @param {number} [cooldownMs=500] - Cooldown period in ms
+ * @param {number} [cooldownMs=150] - Cooldown period in ms (reduced to allow faster state updates)
  * @returns {boolean}
  */
-function wasRecentlyUpdated(context, cooldownMs = 500) {
+function wasRecentlyUpdated(context, cooldownMs = 150) {
   const lastUpdate = lastUpdateTimestamps[context];
   if (!lastUpdate) return false;
   return Date.now() - lastUpdate < cooldownMs;
@@ -235,6 +238,41 @@ function wasRecentlyUpdated(context, cooldownMs = 500) {
  */
 function clearUpdateTimestamp(context) {
   delete lastUpdateTimestamps[context];
+}
+
+/**
+ * Cache state for an accessory (used to restore state on page switch)
+ * @param {string} actionType - Action type (e.g., 'com.isrudoy.spruthub.light')
+ * @param {number} accessoryId - Accessory ID
+ * @param {DeviceState} state - State to cache
+ * @returns {void}
+ */
+function cacheState(actionType, accessoryId, state) {
+  if (!actionType || !accessoryId) return;
+  // Don't cache error/connecting states
+  if (state.error || state.connecting) return;
+  const key = `${actionType}:${accessoryId}`;
+  stateCache[key] = { ...state };
+}
+
+/**
+ * Get cached state for an accessory
+ * @param {string} actionType - Action type
+ * @param {number} accessoryId - Accessory ID
+ * @returns {DeviceState|undefined}
+ */
+function getCachedState(actionType, accessoryId) {
+  if (!actionType || !accessoryId) return undefined;
+  const key = `${actionType}:${accessoryId}`;
+  return stateCache[key];
+}
+
+/**
+ * Clear all cached states (call on disconnect)
+ * @returns {void}
+ */
+function clearStateCache() {
+  Object.keys(stateCache).forEach((key) => delete stateCache[key]);
 }
 
 // ============================================================
@@ -256,4 +294,7 @@ module.exports = {
   markAccessoryUpdated,
   wasRecentlyUpdated,
   clearUpdateTimestamp,
+  cacheState,
+  getCachedState,
+  clearStateCache,
 };

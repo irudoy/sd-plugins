@@ -218,6 +218,7 @@ const switchAction = new BaseAction({
   deviceTypeName: 'Switch',
   drawIcon: (ctx, x, y, size, color) => drawSwitchIcon(ctx, x, y, size, color, false),
   initialState: { on: false },
+  useRoomName: false,       // Show accessory/service name (default). Set true for lights.
   findService: (accessory) => SprutHubClient.findSwitchService(accessory),
   extractState: extractOnOffState,
   renderState,              // Keypad rendering (144x144)
@@ -228,6 +229,12 @@ const switchAction = new BaseAction({
 
 module.exports = switchAction.getExports();
 ```
+
+**Display name logic (`getDisplayName`):**
+- `customName` (if set by user)
+- `roomName` (only if `useRoomName: true` in config, e.g., for lights)
+- `serviceName` (if different from accessoryName, e.g., multi-switch devices)
+- `accessoryName` (default fallback)
 
 ### Knob Support (StreamDock+)
 
@@ -242,6 +249,12 @@ The `willAppear` event payload contains `controller: 'Keypad' | 'Knob'` to detec
 - `handleDialRotate` — debounced API call (150ms)
 
 State is synced across all buttons for the same accessory via `syncAccessoryState()`.
+
+**State caching (page switch):**
+- `cacheState(actionType, accessoryId, state)` — cache state when fetched or changed
+- `getCachedState(actionType, accessoryId)` — restore cached state on `willAppear`
+- Prevents "Connecting..." flash when switching StreamDock pages
+- Key format: `${actionType}:${accessoryId}` to avoid collisions between device types
 
 ### Action-Specific Display
 
@@ -512,7 +525,13 @@ const $propEvent = SprutHubPI.initDeviceSelection({
 - `SprutHubPI.testConnection()` — test connection button handler
 - `SprutHubPI.saveSettings()` — save and send settings to plugin
 - `SprutHubPI.findOnCharacteristic(service)` — find On characteristic
+- `SprutHubPI.findBrightnessCharacteristic(service)` — find Brightness characteristic
 - `SprutHubPI.getCharType(characteristic)` — get characteristic type
+
+**Connection settings behavior:**
+- Auto-collapse on page load if already configured
+- Stay open after successful test (let user collapse manually)
+- Service dropdown always visible (even with single service) so user sees what's selected
 
 **Cascade selection reset:**
 - When room changes → device and service selectors reset
@@ -609,6 +628,8 @@ if (dataPartition) {
 5. **DEBUG left enabled** — Set `DEBUG = true` in `plugin/lib/common.js` for debugging (logs to `plugin/plugin.log`), but ensure it's `false` before finishing work
 6. **Knob shows Keypad layout** — Implement `renderKnobState` callback for actions that support Knob; if not provided, BaseAction falls back to Keypad rendering
 7. **didReceiveSettings sends stale data** — StreamDock may send `didReceiveSettings` with outdated data after PI updates settings; BaseAction ignores this if context already has `accessoryId`
+8. **Characteristic ID vs Type** — `CHAR_ON` (37), `CHAR_BRIGHTNESS` (38) etc. are TYPE constants, not actual IDs. Always use `settings.characteristicId` from PI, not type constants for matching in `handleStateChange`
+9. **Offline state rendering** — Don't use generic `drawOfflineWithIcon()` for all devices. Each action's `renderState` should handle `state.offline` and show actual state + "Offline" label (see switch.js)
 
 ## Reference
 
