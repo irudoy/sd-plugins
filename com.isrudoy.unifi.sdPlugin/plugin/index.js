@@ -5,11 +5,12 @@
  */
 
 const { exec } = require('child_process');
+const os = require('os');
 const https = require('https');
 const WebSocket = require('ws');
 const fs = require('fs');
 const path = require('path');
-const { createCanvas } = require('canvas');
+const { createCanvas } = require('@napi-rs/canvas');
 
 // ============================================================
 // Type Definitions
@@ -752,17 +753,19 @@ function onKeyUp(action, context, payload) {
   const controllerUrl = settings.controllerUrl;
   const selectedVpn = settings.selectedVpn;
 
+  const openCmd = os.platform() === 'win32' ? 'start ""' : 'open';
+
   if (controllerUrl && selectedVpn) {
     // Open VPN client settings page
     const vpnUrl = `${controllerUrl}/network/default/settings/vpn/client/form/${selectedVpn}`;
-    exec(`open "${vpnUrl}"`, (error) => {
+    exec(`${openCmd} "${vpnUrl}"`, (error) => {
       if (error) {
         log('[Unifi] Error opening URL:', error.message);
       }
     });
   } else if (controllerUrl) {
     // Fallback to controller main page
-    exec(`open "${controllerUrl}"`, (error) => {
+    exec(`${openCmd} "${controllerUrl}"`, (error) => {
       if (error) {
         log('[Unifi] Error opening URL:', error.message);
       }

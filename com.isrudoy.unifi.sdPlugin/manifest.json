@@ -19,6 +19,7 @@
   "Name": "Unifi Network",
   "Icon": "static/img/pluginIcon",
   "CodePathMac": "plugin/index.js",
+  "CodePathWin": "plugin/index.js",
   "Description": "Monitor Unifi Network VPN connections",
   "Category": "Unifi Network",
   "CategoryIcon": "static/img/categoryIcon",
@@ -27,6 +28,10 @@
     {
       "Platform": "mac",
       "MinimumVersion": "10.11"
+    },
+    {
+      "Platform": "windows",
+      "MinimumVersion": "7"
     }
   ],
   "Software": {

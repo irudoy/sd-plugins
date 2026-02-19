@@ -7,7 +7,7 @@ Monorepo for StreamDock plugins. Cross-platform: macOS + Windows.
 | Plugin | ID | Description |
 |--------|-----|-------------|
 | mactools | `com.isrudoy.mactools` | Drive Info, Battery Monitor, Run Script | macOS only |
-| unifi | `com.isrudoy.unifi` | VPN Status - Unifi Network VPN client | macOS only |
+| unifi | `com.isrudoy.unifi` | VPN Status - Unifi Network VPN client | macOS + Windows |
 | spruthub | `com.isrudoy.spruthub` | Sprut.Hub smart home control (9 actions) | macOS + Windows |
 
 **Architecture:** Node.js backend + HTML/JS Property Inspector

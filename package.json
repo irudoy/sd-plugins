@@ -13,7 +13,9 @@
     "link:unifi": "ln -sf \"$(pwd)/com.isrudoy.unifi.sdPlugin\" \"$HOME/Library/Application Support/HotSpot/StreamDock/plugins/com.isrudoy.unifi.sdPlugin\"",
     "link:spruthub": "ln -sf \"$(pwd)/com.isrudoy.spruthub.sdPlugin\" \"$HOME/Library/Application Support/HotSpot/StreamDock/plugins/com.isrudoy.spruthub.sdPlugin\"",
     "unlink": "rm -f \"$HOME/Library/Application Support/HotSpot/StreamDock/plugins/com.isrudoy.mactools.sdPlugin\" \"$HOME/Library/Application Support/HotSpot/StreamDock/plugins/com.isrudoy.unifi.sdPlugin\" \"$HOME/Library/Application Support/HotSpot/StreamDock/plugins/com.isrudoy.spruthub.sdPlugin\"",
-    "link:win:spruthub": "cmd.exe /c scripts\\link-win-spruthub.cmd"
+    "restart:win": "cmd.exe /c scripts\\restart-win.cmd",
+    "link:win:spruthub": "cmd.exe /c scripts\\link-win.cmd com.isrudoy.spruthub",
+    "link:win:unifi": "cmd.exe /c scripts\\link-win.cmd com.isrudoy.unifi"
   },
   "devDependencies": {
     "@eslint/js": "9.18.0",
