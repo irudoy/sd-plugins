@@ -4,7 +4,7 @@
  * @module lib/draw-common
  */
 
-const { createCanvas } = require('canvas');
+const { createCanvas } = require('@napi-rs/canvas');
 const {
   CANVAS_SIZE,
   CANVAS_CENTER,

@@ -2,13 +2,13 @@
 
 ## Project Overview
 
-Monorepo for StreamDock plugins (macOS).
+Monorepo for StreamDock plugins. Cross-platform: macOS + Windows.
 
 | Plugin | ID | Description |
 |--------|-----|-------------|
-| mactools | `com.isrudoy.mactools` | Drive Info, Battery Monitor, Run Script |
-| unifi | `com.isrudoy.unifi` | VPN Status - Unifi Network VPN client |
-| spruthub | `com.isrudoy.spruthub` | Sprut.Hub smart home control (9 actions) |
+| mactools | `com.isrudoy.mactools` | Drive Info, Battery Monitor, Run Script | macOS only |
+| unifi | `com.isrudoy.unifi` | VPN Status - Unifi Network VPN client | macOS only |
+| spruthub | `com.isrudoy.spruthub` | Sprut.Hub smart home control (9 actions) | macOS + Windows |
 
 **Architecture:** Node.js backend + HTML/JS Property Inspector
 **SDK:** StreamDock SDK (NOT Elgato Stream Deck SDK)
@@ -26,7 +26,7 @@ sd-plugins/
 │   ├── streamdock.d.ts       # Plugin backend types
 │   └── property-inspector.d.ts # PI globals ($settings, $websocket, etc.)
 ├── com.isrudoy.mactools.sdPlugin/
-│   ├── package.json          # Runtime dependencies (ws, canvas)
+│   ├── package.json          # Runtime dependencies (ws, node-canvas)
 │   ├── package-lock.json
 │   ├── manifest.json
 │   ├── plugin/               # Node.js backend
@@ -63,7 +63,7 @@ sd-plugins/
 
 ## Development
 
-### Setup
+### Setup (macOS)
 ```bash
 npm install           # Install dev dependencies in root
 cd com.isrudoy.mactools.sdPlugin && npm install && cd ..
@@ -72,17 +72,30 @@ cd com.isrudoy.spruthub.sdPlugin && npm install && cd ..
 npm run link          # Symlink all plugins to StreamDock
 ```
 
+### Setup (Windows / WSL)
+
+**Environment:** WSL2 (Linux), StreamDock runs on Windows with built-in Node.js (v20.8.1).
+**Plugin directory:** `%APPDATA%\HotSpot\StreamDock\plugins\`
+**Linking:** `mklink /D` from Windows plugins dir to WSL path (`\\wsl$\...`). Requires admin.
+
+```bash
+npm install                                          # Install dev dependencies in root
+cd com.isrudoy.spruthub.sdPlugin && npm install && cd ..  # Install runtime deps (Linux binary)
+cd com.isrudoy.spruthub.sdPlugin && npm install --os=win32 --cpu=x64 && cd ..  # Add Windows binary
+npm run link:win:spruthub                            # Create Windows symlink (run as admin)
+```
+
 ### Scripts (from root)
 ```bash
 npm run lint          # ESLint check
 npm run fmt           # ESLint + Prettier fix
 npm run typecheck     # TypeScript check (JSDoc)
-npm run restart       # Restart StreamDock app
-npm run link          # Link all plugins
-npm run link:mactools # Link mactools only
-npm run link:unifi    # Link unifi only
-npm run link:spruthub # Link spruthub only
-npm run unlink        # Remove symlinks
+npm run restart       # Restart StreamDock app (macOS)
+npm run link          # Link all plugins (macOS)
+npm run link:mactools # Link mactools only (macOS)
+npm run link:unifi    # Link unifi only (macOS)
+npm run link:spruthub # Link spruthub only (macOS)
+npm run unlink        # Remove symlinks (macOS)
 ```
 
 ### Testing
@@ -356,7 +369,7 @@ All actions support these visual states:
 
 ### Canvas Drawing
 
-Uses `node-canvas` for dynamic button images. Two canvas sizes:
+Uses `@napi-rs/canvas` (Skia backend) for dynamic button images. Two canvas sizes:
 - **Keypad**: 144×144 px (square button)
 - **Knob**: 230×144 px (wide touchscreen)
 
@@ -574,10 +587,10 @@ Uses native helper (`plugin/devices/razer-battery-helper`) for HID communication
 
 ## Dynamic Images
 
-**SVG does not work!** StreamDock does not support SVG. Use node-canvas + PNG:
+**SVG does not work!** StreamDock does not support SVG. Use `@napi-rs/canvas` + PNG:
 
 ```javascript
-const { createCanvas } = require('canvas');
+const { createCanvas } = require('@napi-rs/canvas');
 
 function drawButton() {
   const canvas = createCanvas(144, 144);
@@ -603,9 +616,41 @@ if (dataPartition) {
 | Package | Purpose |
 |---------|---------|
 | ws | WebSocket for StreamDock communication |
-| canvas | PNG image generation |
+| @napi-rs/canvas | PNG image generation (Skia backend, prebuilt binaries) |
 
-**Note:** canvas requires native compilation.
+### Canvas Library: @napi-rs/canvas
+
+Replaced `node-canvas` (Cairo) with `@napi-rs/canvas` (Skia) for cross-platform support.
+
+**Why not node-canvas:**
+- Requires native compilation (node-gyp + Cairo + Pango + GTK on Windows)
+- Known issues with prebuilt binaries on Node 20 + Windows
+- Cannot cross-install (WSL `npm install` produces Linux binaries unusable by Windows Node.js)
+
+**Why @napi-rs/canvas:**
+- Ships prebuilt binaries per platform — no compilation, no system dependencies
+- Canvas 2D API is identical (`createCanvas`, `toDataURL`, `ctx.*` — drop-in replacement)
+- Only code change: `require('canvas')` → `require('@napi-rs/canvas')`
+- System fonts (`sans-serif`) load automatically via `GlobalFonts.loadSystemFonts()`
+- Used by discord.js, actively maintained
+
+**Platform binaries (optionalDependencies in package.json):**
+
+| Package | Platform | Size |
+|---------|----------|------|
+| `@napi-rs/canvas-win32-x64-msvc` | Windows x64 | ~36 MB |
+| `@napi-rs/canvas-darwin-arm64` | macOS Apple Silicon | ~24 MB |
+| `@napi-rs/canvas-darwin-x64` | macOS Intel | ~29 MB |
+
+npm auto-installs the binary for the current platform. For cross-platform development (WSL → Windows), use `--os`/`--cpu` flags to add binaries for other platforms:
+```bash
+npm install --os=win32 --cpu=x64   # add Windows binary from WSL
+npm install --os=darwin --cpu=arm64  # add macOS ARM binary
+```
+
+**API differences from node-canvas (not used in our code, but worth knowing):**
+- Font registration: `registerFont()` → `GlobalFonts.registerFromPath()`
+- Image loading: `new Image(); img.src = buf` → `loadImage(pathOrBuffer)` (async)
 
 ## Coding Style
 
@@ -634,3 +679,4 @@ if (dataPartition) {
 ## Reference
 
 - StreamDock SDK: https://sdk.key123.vip/en/guide/overview.html
+- Reference plugins cloned in `./reference/` (gitignored): `StreamDock-Plugin-SDK/`, `StreamDock-Plugins/`

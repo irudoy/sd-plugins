@@ -4,8 +4,13 @@
   "description": "Sprut.Hub smart home control for StreamDock",
   "main": "plugin/index.js",
   "dependencies": {
-    "canvas": "3.2.1",
+    "@napi-rs/canvas": "0.1.93",
     "ws": "8.14.2"
+  },
+  "optionalDependencies": {
+    "@napi-rs/canvas-darwin-arm64": "0.1.93",
+    "@napi-rs/canvas-darwin-x64": "0.1.93",
+    "@napi-rs/canvas-win32-x64-msvc": "^0.1.93"
   },
   "author": "isrudoy",
   "license": "MIT"

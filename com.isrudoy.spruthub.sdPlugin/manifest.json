@@ -123,6 +123,7 @@
   "Name": "Sprut.Hub",
   "Icon": "static/img/pluginIcon",
   "CodePathMac": "plugin/index.js",
+  "CodePathWin": "plugin/index.js",
   "Description": "Control Sprut.Hub smart home devices",
   "Category": "Sprut.Hub",
   "CategoryIcon": "static/img/categoryIcon",
@@ -131,6 +132,10 @@
     {
       "Platform": "mac",
       "MinimumVersion": "10.11"
+    },
+    {
+      "Platform": "windows",
+      "MinimumVersion": "7"
     }
   ],
   "Software": {
