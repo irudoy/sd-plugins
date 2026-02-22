@@ -689,6 +689,11 @@ npm install --os=darwin --cpu=arm64  # add macOS ARM binary
 8. **Characteristic ID vs Type** — `CHAR_ON` (37), `CHAR_BRIGHTNESS` (38) etc. are TYPE constants, not actual IDs. Always use `settings.characteristicId` from PI, not type constants for matching in `handleStateChange`
 9. **Offline state rendering** — Don't use generic `drawOfflineWithIcon()` for all devices. Each action's `renderState` should handle `state.offline` and show actual state + "Offline" label (see switch.js)
 
+## Future Improvements
+
+### SVG icons via canvas
+`@napi-rs/canvas` (Skia) supports SVG natively via `loadImage(Buffer.from(svgString))`. Can replace manual canvas path drawing with parametric SVG strings (fill/stroke as template variables) and `drawImage()` for scaling. Applies to all plugins.
+
 ## Reference
 
 - StreamDock SDK: https://sdk.key123.vip/en/guide/overview.html
