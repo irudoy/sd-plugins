@@ -8,6 +8,7 @@ Monorepo for StreamDock plugins. Cross-platform: macOS + Windows.
 |--------|-----|-------------|
 | mactools | `com.isrudoy.mactools` | Drive Info, Battery Monitor, Run Script | macOS only |
 | unifi | `com.isrudoy.unifi` | VPN Status - Unifi Network VPN client | macOS + Windows |
+| wintools | `com.isrudoy.wintools` | Battery Monitor (Razer devices) | Windows only |
 | spruthub | `com.isrudoy.spruthub` | Sprut.Hub smart home control (9 actions) | macOS + Windows |
 
 **Architecture:** Node.js backend + HTML/JS Property Inspector
@@ -693,6 +694,33 @@ npm install --os=darwin --cpu=arm64  # add macOS ARM binary
 
 ### SVG icons via canvas
 `@napi-rs/canvas` (Skia) supports SVG natively via `loadImage(Buffer.from(svgString))`. Can replace manual canvas path drawing with parametric SVG strings (fill/stroke as template variables) and `drawImage()` for scaling. Applies to all plugins.
+
+### Corsair K83 Wireless battery support (wintools)
+
+**Status:** Research done, implementation blocked — iCUE itself doesn't show battery level for K83, protocol unconfirmed.
+
+**Known facts:**
+- VID: `0x1B1C`, PID: `0x1B42` (wired/dongle) or `0x1B6D` (variant) — need to confirm in Device Manager
+- K83 (2018) likely uses **NXP (CUE) protocol** (same as K63 Wireless), not Bragi
+- K83 is NOT supported by any open-source project (ckb-next, OpenCorsairLink, etc.)
+- Corsair dongle is a composite HID device with multiple interfaces (MI_00 keyboard, MI_01 consumer, MI_02+ vendor-specific)
+
+**NXP battery protocol (from ckb-next source):**
+```
+Send 64 bytes: {0x0E, 0x50, 0x00, ...}  — CMD_GET + FIELD_BATTERY
+Recv 64 bytes: [4]=level index (0-4), [5]=status (1=discharging, 2=charging, 3=charged)
+Battery LUT: index 0→0%, 1→15%, 2→30%, 3→50%, 4→100%
+```
+- Target the **last HID interface** (vendor-specific, usage page `0xFF00`+)
+- Communication: `HidD_SetFeature` / `HidD_GetFeature` or interrupt endpoints (firmware-dependent)
+
+**Alternative protocols (if NXP doesn't work):**
+- Bragi: send `{0x08, 0x02, 0x0F}`, response[3-5] = battery in tenths of percent
+- Headset: send `{0xC9, 0x64}`, read 5 bytes — unlikely for keyboard
+
+**Next step:** USB traffic capture with Wireshark + USBPcap while iCUE polls K83.
+
+**Sources:** [ckb-next](https://github.com/ckb-next/ckb-next) (NXP/Bragi protocol), [HeadsetControl](https://github.com/Sapd/HeadsetControl), [iCUE SDK](https://github.com/CorsairOfficial/cue-sdk)
 
 ## Reference
 
