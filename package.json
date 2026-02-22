@@ -15,7 +15,8 @@
     "unlink": "rm -f \"$HOME/Library/Application Support/HotSpot/StreamDock/plugins/com.isrudoy.mactools.sdPlugin\" \"$HOME/Library/Application Support/HotSpot/StreamDock/plugins/com.isrudoy.unifi.sdPlugin\" \"$HOME/Library/Application Support/HotSpot/StreamDock/plugins/com.isrudoy.spruthub.sdPlugin\"",
     "restart:win": "cmd.exe /c scripts\\restart-win.cmd",
     "link:win:spruthub": "cmd.exe /c scripts\\link-win.cmd com.isrudoy.spruthub",
-    "link:win:unifi": "cmd.exe /c scripts\\link-win.cmd com.isrudoy.unifi"
+    "link:win:unifi": "cmd.exe /c scripts\\link-win.cmd com.isrudoy.unifi",
+    "link:win:wintools": "cmd.exe /c scripts\\link-win.cmd com.isrudoy.wintools"
   },
   "devDependencies": {
     "@eslint/js": "9.18.0",

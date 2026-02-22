@@ -38,7 +38,7 @@ const {
  * @typedef {import('../../../types/streamdock').KeyPayload} KeyPayload
  * @typedef {import('../../../types/streamdock').SettingsPayload} SettingsPayload
  * @typedef {import('../../../types/streamdock').SendToPluginPayload} SendToPluginPayload
- * @typedef {import('canvas').CanvasRenderingContext2D} CanvasContext
+ * @typedef {import('@napi-rs/canvas').SKRSContext2D} CanvasContext
  */
 
 /**

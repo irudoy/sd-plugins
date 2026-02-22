@@ -28,7 +28,7 @@ const {
  * @property {boolean} [isCharging] - Whether device is charging
  * @property {boolean} [connected] - Whether device is connected
  * @property {boolean} [sleeping] - Whether device is in sleep mode
- * @property {'apple'|'razer'} [type] - Device type
+ * @property {'razer'} [type] - Device type
  * @property {string} [error] - Error code ('access_denied', 'timeout', 'not_supported')
  * @property {boolean} [isWired] - Whether Razer device is wired
  * @property {number|null} [lastBattery] - Cached battery level when disconnected
@@ -64,6 +64,45 @@ function getDimBatteryColor(percent) {
     return COLORS.dimYellow;
   }
   return COLORS.dimRed;
+}
+
+// ============================================================
+// Lightning Bolt Drawing
+// ============================================================
+
+/**
+ * Draw lightning bolt icon (replaces emoji which doesn't render on Windows)
+ * @param {CanvasContext} ctx - Canvas context
+ * @param {number} cx - Center X
+ * @param {number} cy - Center Y
+ * @param {number} size - Icon size (height)
+ * @param {string} fillColor - Fill color
+ * @param {string} [strokeColor] - Outline color
+ * @param {number} [strokeWidth] - Outline width
+ * @returns {void}
+ */
+function drawLightningBolt(ctx, cx, cy, size, fillColor, strokeColor, strokeWidth) {
+  const s = size / 24;
+  ctx.save();
+  ctx.translate(cx, cy);
+  ctx.beginPath();
+  ctx.moveTo(-3 * s, -12 * s);
+  ctx.lineTo(-7 * s, 1 * s);
+  ctx.lineTo(-1 * s, 1 * s);
+  ctx.lineTo(-4 * s, 12 * s);
+  ctx.lineTo(7 * s, -2 * s);
+  ctx.lineTo(1 * s, -2 * s);
+  ctx.lineTo(4 * s, -12 * s);
+  ctx.closePath();
+  if (strokeColor && strokeWidth) {
+    ctx.strokeStyle = strokeColor;
+    ctx.lineWidth = strokeWidth;
+    ctx.lineJoin = 'round';
+    ctx.stroke();
+  }
+  ctx.fillStyle = fillColor;
+  ctx.fill();
+  ctx.restore();
 }
 
 // ============================================================
@@ -255,18 +294,12 @@ function drawCharging(deviceName, batteryLevel) {
     ctx.fillRect(x + padding, y + padding, fillWidth, innerHeight);
   }
 
-  // Charging icon with white outline
   const { x, y, width, height } = BATTERY_ICON;
-  ctx.font = 'bold 24px sans-serif';
-  ctx.textAlign = 'center';
-  ctx.strokeStyle = COLORS.white;
-  ctx.lineWidth = 3;
-  ctx.strokeText('\u26A1', x + width / 2, y + height / 2 + 8);
-  ctx.fillStyle = COLORS.yellow;
-  ctx.fillText('\u26A1', x + width / 2, y + height / 2 + 8);
+  drawLightningBolt(ctx, x + width / 2, y + height / 2, 24, COLORS.yellow, COLORS.white, 3);
 
   ctx.fillStyle = COLORS.white;
   ctx.font = 'bold 28px sans-serif';
+  ctx.textAlign = 'center';
   if (batteryLevel !== null && batteryLevel !== undefined) {
     ctx.fillText(`${batteryLevel}%`, CANVAS_SIZE / 2, 107);
   } else {
@@ -574,15 +607,15 @@ function drawCompactDevice(ctx, device, yOffset) {
       drawCompactBatteryFill(ctx, batteryX, batteryY, device.battery, COLORS.green);
     }
 
-    // Charging icon with white outline
-    ctx.font = 'bold 12px sans-serif';
-    ctx.textAlign = 'center';
-    ctx.textBaseline = 'middle';
-    ctx.strokeStyle = COLORS.white;
-    ctx.lineWidth = 2;
-    ctx.strokeText('\u26A1', batteryX + battWidth / 2, valueCenterY);
-    ctx.fillStyle = COLORS.yellow;
-    ctx.fillText('\u26A1', batteryX + battWidth / 2, valueCenterY);
+    drawLightningBolt(
+      ctx,
+      batteryX + battWidth / 2,
+      valueCenterY,
+      14,
+      COLORS.yellow,
+      COLORS.white,
+      2
+    );
 
     ctx.textAlign = 'left';
     ctx.fillStyle = COLORS.white;

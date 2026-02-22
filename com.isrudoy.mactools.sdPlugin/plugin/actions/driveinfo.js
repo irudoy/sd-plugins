@@ -4,7 +4,7 @@
  */
 
 const { execSync, exec } = require('child_process');
-const { createCanvas } = require('canvas');
+const { createCanvas } = require('@napi-rs/canvas');
 const { log, CANVAS_SIZE, DRIVEINFO_ACTION } = require('../lib/common');
 const { contexts, stopTimer, setTimer, setContext } = require('../lib/state');
 const { setImage, setTitle, sendToPropertyInspector } = require('../lib/websocket');

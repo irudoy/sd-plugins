@@ -98,6 +98,19 @@ npm run link:spruthub # Link spruthub only (macOS)
 npm run unlink        # Remove symlinks (macOS)
 ```
 
+### Completion Checklist
+
+Run these after finishing any work:
+
+```bash
+# Install deps in all plugin directories
+for d in com.isrudoy.*.sdPlugin; do (cd "$d" && npm install); done
+
+npm run fmt           # Fix formatting
+npm run lint          # Lint check (must pass)
+npm run typecheck     # Type check (must pass)
+```
+
 ### Testing
 ```bash
 node --check com.isrudoy.mactools.sdPlugin/plugin/index.js  # Syntax check

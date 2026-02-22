@@ -20,7 +20,7 @@ const {
 // ============================================================
 
 /**
- * @typedef {import('canvas').CanvasRenderingContext2D} CanvasContext
+ * @typedef {import('@napi-rs/canvas').SKRSContext2D} CanvasContext
  */
 
 /**
@@ -40,7 +40,7 @@ const {
 
 /**
  * Create a 144x144 canvas with black background
- * @returns {{canvas: import('canvas').Canvas, ctx: CanvasContext}}
+ * @returns {{canvas: import('@napi-rs/canvas').Canvas, ctx: CanvasContext}}
  */
 function createButtonCanvas() {
   const canvas = createCanvas(CANVAS_SIZE, CANVAS_SIZE);
@@ -52,7 +52,7 @@ function createButtonCanvas() {
 
 /**
  * Create a 200x100 canvas for Knob (wide touchscreen area)
- * @returns {{canvas: import('canvas').Canvas, ctx: CanvasContext}}
+ * @returns {{canvas: import('@napi-rs/canvas').Canvas, ctx: CanvasContext}}
  */
 function createKnobCanvas() {
   const canvas = createCanvas(KNOB_WIDTH, KNOB_HEIGHT);

@@ -5,7 +5,7 @@
  */
 
 const { exec } = require('child_process');
-const { createCanvas } = require('canvas');
+const { createCanvas } = require('@napi-rs/canvas');
 const { log, CANVAS_SIZE, OSASCRIPT_ACTION } = require('../lib/common');
 const { contexts, setContext } = require('../lib/state');
 const { setImage, clearImage } = require('../lib/websocket');

@@ -1,11 +1,14 @@
 {
-  "name": "com.isrudoy.mactools",
+  "name": "com.isrudoy.wintools",
   "version": "1.0.0",
-  "description": "macOS system utilities for StreamDock",
+  "description": "Windows system utilities for StreamDock",
   "main": "plugin/index.js",
   "dependencies": {
     "@napi-rs/canvas": "0.1.93",
     "ws": "8.14.2"
+  },
+  "optionalDependencies": {
+    "@napi-rs/canvas-win32-x64-msvc": "0.1.93"
   },
   "author": "isrudoy",
   "license": "MIT"

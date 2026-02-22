@@ -1,0 +1,38 @@
+{
+  "Actions": [
+    {
+      "Icon": "static/img/batteryIcon",
+      "Name": "Battery Monitor",
+      "States": [
+        {
+          "Image": "static/img/batteryAction"
+        }
+      ],
+      "Controllers": ["Keypad", "Information"],
+      "Tooltip": "Shows battery level for Razer devices",
+      "UUID": "com.isrudoy.wintools.battery",
+      "PropertyInspectorPath": "battery/index.html"
+    }
+  ],
+  "SDKVersion": 1,
+  "Author": "isrudoy",
+  "Name": "WTools",
+  "Icon": "static/img/pluginIcon",
+  "CodePathWin": "plugin/index.js",
+  "Description": "Windows system utilities for StreamDock",
+  "Category": "WTools",
+  "CategoryIcon": "static/img/categoryIcon",
+  "Version": "1.0.0",
+  "OS": [
+    {
+      "Platform": "windows",
+      "MinimumVersion": "7"
+    }
+  ],
+  "Software": {
+    "MinimumVersion": "3.10.188.226"
+  },
+  "Nodejs": {
+    "Version": "20"
+  }
+}

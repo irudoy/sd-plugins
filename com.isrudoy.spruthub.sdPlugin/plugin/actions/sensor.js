@@ -21,7 +21,7 @@ const {
 // ============================================================
 
 /**
- * @typedef {import('canvas').CanvasRenderingContext2D} CanvasContext
+ * @typedef {import('@napi-rs/canvas').SKRSContext2D} CanvasContext
  */
 
 /**
