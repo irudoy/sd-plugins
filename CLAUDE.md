@@ -37,6 +37,14 @@ sd-plugins/
 │   ├── battery/
 │   ├── osascript/
 │   └── static/               # SDK (not linted)
+├── com.isrudoy.wintools.sdPlugin/
+│   ├── package.json          # Runtime dependencies (ws, @napi-rs/canvas)
+│   ├── package-lock.json
+│   ├── manifest.json
+│   ├── Makefile              # Compile razer-battery-helper.exe
+│   ├── plugin/               # Node.js backend
+│   ├── battery/              # Property Inspector
+│   └── static/               # SDK (not linted)
 ├── com.isrudoy.unifi.sdPlugin/
 │   ├── package.json
 │   ├── package-lock.json
@@ -94,9 +102,10 @@ npm run link          # Symlink all plugins to StreamDock
 
 ```bash
 npm install                                          # Install dev dependencies in root
-cd com.isrudoy.spruthub.sdPlugin && npm install && cd ..  # Install runtime deps (Linux binary)
-cd com.isrudoy.spruthub.sdPlugin && npm install --os=win32 --cpu=x64 && cd ..  # Add Windows binary
-npm run link:win:spruthub                            # Create Windows symlink (run as admin)
+cd com.isrudoy.wintools.sdPlugin && npm install && cd ..   # Install runtime deps
+cd com.isrudoy.wintools.sdPlugin && npm install --os=win32 --cpu=x64 && cd ..  # Add Windows binary
+cd com.isrudoy.wintools.sdPlugin && make && cd ..          # Compile Razer helper
+npm run link:win:wintools                            # Create Windows symlink (run as admin)
 ```
 
 ### Scripts (from root)
@@ -219,6 +228,61 @@ plugin/
     ├── apple.js          # Apple Bluetooth battery
     └── razer.js          # Razer HID battery (native helper)
 ```
+
+## wintools (com.isrudoy.wintools)
+
+Windows-only Battery Monitor for Razer wireless devices via native HID helper.
+
+### Actions
+
+| Action | UUID | Description |
+|--------|------|-------------|
+| Battery Monitor | `com.isrudoy.wintools.battery` | Razer device battery with dual-device support |
+
+### Module Structure
+
+```
+plugin/
+├── index.js              # Entry point, WebSocket, event routing
+├── lib/
+│   ├── common.js         # Constants, colors, logging
+│   ├── state.js          # Shared state (contexts, timers, device cache)
+│   ├── websocket.js      # setImage, setTitle, sendToPropertyInspector
+│   └── battery-drawing.js # Canvas drawing (single + dual device modes)
+├── actions/
+│   └── battery.js        # Battery action (Razer only, no Apple)
+└── devices/
+    ├── razer.js           # JS wrapper (enumerate + query via .exe helper)
+    ├── razer-battery-helper.c   # C source (Windows HID API)
+    └── razer-battery-helper.exe # Compiled binary (cross-compiled from WSL)
+```
+
+### Native Helper (razer-battery-helper.exe)
+
+C program using Windows HID API. Cross-compiled from WSL with MinGW:
+```bash
+x86_64-w64-mingw32-gcc -O2 -o razer-battery-helper.exe razer-battery-helper.c -lsetupapi -lhid
+```
+
+**CLI interface (same as macOS helper):**
+```
+--enumerate  → {"devices": [{"name": "Viper V3 Pro", "pid": 193, "path": "\\?\hid#...", "isWired": false}]}
+--path "..." → {"battery": 85, "charging": false} | {"sleeping": true} | {"error": "..."}
+```
+
+**Key implementation details:**
+- Windows mouse driver (mouhid.sys) blocks `GENERIC_READ|GENERIC_WRITE` on mi_00
+- Solution: `CreateFile` with `dwDesiredAccess=0` + `IOCTL_HID_SET/GET_FEATURE` (FILE_ANY_ACCESS)
+- Target interface: `mi_00` with `FeatureReportByteLength >= 91`
+- 91-byte buffers (report ID 0x00 prepended, all offsets +1 vs macOS)
+- CRC: XOR over bytes [3..88] (transaction ID excluded)
+
+### Features (vs mactools battery)
+
+- **Dual device mode** — two devices on one button (split-view 144×144)
+- **Per-device intervals** — configurable 1–300 sec per device
+- **24-hour device cache** — shows offline devices with last-known battery %
+- **Lightning bolt as canvas path** — emoji `\u26A1` doesn't render on Windows sans-serif
 
 ## unifi (com.isrudoy.unifi)
 
@@ -746,9 +810,13 @@ exec('ioreg -r -k BatteryPercent | grep -E "..."');
 exec('system_profiler SPBluetoothDataType');
 ```
 
-### Razer Battery
+### Razer Battery (macOS)
 Uses native helper (`plugin/devices/razer-battery-helper`) for HID communication.
 **Requires:** Input Monitoring permission in System Preferences.
+
+### Razer Battery (Windows)
+Uses native C helper (`plugin/devices/razer-battery-helper.exe`) for HID communication.
+Opens device with `dwDesiredAccess=0` to bypass mouhid.sys driver lock, uses `IOCTL_HID_SET/GET_FEATURE`.
 
 ## Dynamic Images
 
@@ -872,6 +940,38 @@ Battery LUT: index 0→0%, 1→15%, 2→30%, 3→50%, 4→100%
 **Next step:** USB traffic capture with Wireshark + USBPcap while iCUE polls K83.
 
 **Sources:** [ckb-next](https://github.com/ckb-next/ckb-next) (NXP/Bragi protocol), [HeadsetControl](https://github.com/Sapd/HeadsetControl), [iCUE SDK](https://github.com/CorsairOfficial/cue-sdk)
+
+### 3Dconnexion SpaceMouse Wireless battery support (wintools)
+
+**Status:** Research done, protocol is standard HID — ready to implement. Connected via Bluetooth.
+
+**Device IDs (VID `0x256F`):**
+
+| PID | Device |
+|-----|--------|
+| `0xC62E` | SpaceMouse Wireless (USB cable) |
+| `0xC62F` | SpaceMouse Wireless Receiver (dongle) |
+| `0xC652` | Universal Receiver (multi-device dongle) |
+
+**Battery protocol — standard HID, not proprietary:**
+- **Report ID:** `0x17` — **Input report** (device sends passively, no polling needed)
+- **Usage Page:** `0x06` (Generic Device Controls), **Usage:** `0x20` (Battery Strength)
+- **Format:** 2 bytes — `[0x17, battery%]` where battery is 0-100%
+- Device sends battery report after user interaction stops (release cap/puck)
+- TLC: Usage Page `0x01`, Usage `0x08` (Multi-axis Controller)
+
+**Reading approaches:**
+1. `ReadFile` loop — filter for report ID `0x17` among motion/button reports
+2. `HidD_GetInputReport` — request cached report with `buffer[0] = 0x17`
+
+**Key advantages over Razer:**
+- No `SetFeature/GetFeature` — just read input reports
+- No proprietary protocol, CRC, or transaction IDs
+- `GENERIC_READ` sufficient — no driver conflict (mouhid.sys doesn't claim multi-axis controllers)
+
+**Open question:** Bluetooth connection — need to verify HID report descriptor is the same over BT as USB dongle.
+
+**Sources:** [spacenavd](https://github.com/FreeSpacenav/spacenavd) (VID/PID table), [3Dconnexion Forum](https://forum.3dconnexion.com/viewtopic.php?t=40919) (HID descriptor analysis), [hidapi#136](https://github.com/libusb/hidapi/issues/136) (Universal Receiver interfaces)
 
 ## Reference
 
