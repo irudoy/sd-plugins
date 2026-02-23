@@ -110,22 +110,19 @@ jobs:
           PLUGIN_DIR="com.isrudoy.${{ matrix.plugin }}.sdPlugin"
           cd "$PLUGIN_DIR"
 
-          # Check if canvas is a dependency
-          if grep -q "@napi-rs/canvas" package.json 2>/dev/null; then
-            for platform in ${{ matrix.platforms }}; do
-              case $platform in
-                darwin-arm64)
-                  npm install --os=darwin --cpu=arm64
-                  ;;
-                darwin-x64)
-                  npm install --os=darwin --cpu=x64
-                  ;;
-                win32-x64)
-                  npm install --os=win32 --cpu=x64
-                  ;;
-              esac
-            done
-          fi
+          for platform in ${{ matrix.platforms }}; do
+            case $platform in
+              darwin-arm64)
+                npm install --os=darwin --cpu=arm64
+                ;;
+              darwin-x64)
+                npm install --os=darwin --cpu=x64
+                ;;
+              win32-x64)
+                npm install --os=win32 --cpu=x64
+                ;;
+            esac
+          done
 
       - name: Clean up unnecessary files
         run: |
@@ -184,18 +181,43 @@ jobs:
             echo "  - $(basename "$f") ($(du -h "$f" | cut -f1))"
           done
 
-      - name: Update version in package.json if bumped
-        if: needs.prepare.outputs.version_bumped == 'true'
+      - name: Update versions and commit
         run: |
           VERSION="${{ needs.prepare.outputs.version }}"
 
+          # Update root package.json and package-lock.json
           npm version "$VERSION" --no-git-tag-version --allow-same-version
+
+          # Update all plugin versions
+          for dir in com.isrudoy.*.sdPlugin; do
+            echo "Updating version in $dir"
+
+            # Update manifest.json
+            node -e "
+              const fs = require('fs');
+              const manifest = JSON.parse(fs.readFileSync('$dir/manifest.json', 'utf8'));
+              manifest.Version = '$VERSION';
+              fs.writeFileSync('$dir/manifest.json', JSON.stringify(manifest, null, 2) + '\n');
+            "
+
+            # Update package.json and package-lock.json
+            (cd "$dir" && npm version "$VERSION" --no-git-tag-version --allow-same-version)
+          done
 
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
           git add package.json package-lock.json
-          git commit -m "chore: release v$VERSION"
-          git push
+          git add com.isrudoy.*.sdPlugin/manifest.json
+          git add com.isrudoy.*.sdPlugin/package.json
+          git add com.isrudoy.*.sdPlugin/package-lock.json
+
+          # Only commit if there are changes
+          if git diff --cached --quiet; then
+            echo "No version changes to commit"
+          else
+            git commit -m "chore: release v$VERSION"
+            git push
+          fi
 
       - name: Create git tag
         run: |
@@ -211,12 +233,20 @@ jobs:
           # Get previous tag
           PREV_TAG=$(git tag --sort=-v:refname | grep -E '^v[0-9]' | head -2 | tail -1)
 
+          # Check if last commit is a release commit (to exclude from changelog)
+          LAST_COMMIT_MSG=$(git log -1 --pretty=format:"%s")
+          if [[ "$LAST_COMMIT_MSG" == "chore: release v"* ]]; then
+            CHANGELOG_HEAD="HEAD~1"
+          else
+            CHANGELOG_HEAD="HEAD"
+          fi
+
           if [ -z "$PREV_TAG" ]; then
             # No previous tag, get all commits
-            COMMITS=$(git log --pretty=format:"- %s" HEAD)
+            COMMITS=$(git log --pretty=format:"- %s" "$CHANGELOG_HEAD")
           else
             # Get commits since previous tag
-            COMMITS=$(git log --pretty=format:"- %s" "$PREV_TAG"..HEAD~1)
+            COMMITS=$(git log --pretty=format:"- %s" "$PREV_TAG".."$CHANGELOG_HEAD")
           fi
 
           # Write changelog to file (multi-line handling)
