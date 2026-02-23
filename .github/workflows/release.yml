@@ -22,8 +22,15 @@ jobs:
           node-version: '20'
           cache: 'npm'
 
-      - name: Install dependencies
+      - name: Install root dependencies
         run: npm ci
+
+      - name: Install plugin dependencies
+        run: |
+          for dir in com.isrudoy.*.sdPlugin; do
+            echo "Installing dependencies in $dir"
+            (cd "$dir" && npm install --omit=optional)
+          done
 
       - name: Lint
         run: npm run lint
