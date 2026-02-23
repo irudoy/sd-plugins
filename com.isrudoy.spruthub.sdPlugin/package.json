@@ -1,6 +1,6 @@
 {
   "name": "com.isrudoy.spruthub",
-  "version": "1.0.0",
+  "version": "1.0.6",
   "description": "Sprut.Hub smart home control for StreamDock",
   "main": "plugin/index.js",
   "dependencies": {

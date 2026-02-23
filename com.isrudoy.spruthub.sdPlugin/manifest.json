@@ -8,7 +8,10 @@
           "Image": "static/img/commonAction"
         }
       ],
-      "Controllers": ["Keypad", "Knob"],
+      "Controllers": [
+        "Keypad",
+        "Knob"
+      ],
       "UUID": "com.isrudoy.spruthub.light",
       "PropertyInspectorPath": "light/index.html",
       "Tooltip": "Control Sprut.Hub lights"
@@ -21,7 +24,9 @@
           "Image": "static/img/commonAction"
         }
       ],
-      "Controllers": ["Keypad"],
+      "Controllers": [
+        "Keypad"
+      ],
       "UUID": "com.isrudoy.spruthub.switch",
       "PropertyInspectorPath": "switch/index.html",
       "Tooltip": "Control Sprut.Hub switches"
@@ -34,7 +39,9 @@
           "Image": "static/img/commonAction"
         }
       ],
-      "Controllers": ["Keypad"],
+      "Controllers": [
+        "Keypad"
+      ],
       "UUID": "com.isrudoy.spruthub.outlet",
       "PropertyInspectorPath": "outlet/index.html",
       "Tooltip": "Control Sprut.Hub outlets"
@@ -47,7 +54,9 @@
           "Image": "static/img/commonAction"
         }
       ],
-      "Controllers": ["Keypad"],
+      "Controllers": [
+        "Keypad"
+      ],
       "UUID": "com.isrudoy.spruthub.lock",
       "PropertyInspectorPath": "lock/index.html",
       "Tooltip": "Control Sprut.Hub locks"
@@ -60,7 +69,10 @@
           "Image": "static/img/commonAction"
         }
       ],
-      "Controllers": ["Keypad", "Knob"],
+      "Controllers": [
+        "Keypad",
+        "Knob"
+      ],
       "UUID": "com.isrudoy.spruthub.cover",
       "PropertyInspectorPath": "cover/index.html",
       "Tooltip": "Control Sprut.Hub window coverings"
@@ -73,7 +85,10 @@
           "Image": "static/img/commonAction"
         }
       ],
-      "Controllers": ["Keypad", "Knob"],
+      "Controllers": [
+        "Keypad",
+        "Knob"
+      ],
       "UUID": "com.isrudoy.spruthub.thermostat",
       "PropertyInspectorPath": "thermostat/index.html",
       "Tooltip": "Control Sprut.Hub thermostats"
@@ -86,7 +101,9 @@
           "Image": "static/img/commonAction"
         }
       ],
-      "Controllers": ["Keypad"],
+      "Controllers": [
+        "Keypad"
+      ],
       "UUID": "com.isrudoy.spruthub.sensor",
       "PropertyInspectorPath": "sensor/index.html",
       "Tooltip": "Display Sprut.Hub sensor values"
@@ -99,7 +116,10 @@
           "Image": "static/img/commonAction"
         }
       ],
-      "Controllers": ["Keypad", "Knob"],
+      "Controllers": [
+        "Keypad",
+        "Knob"
+      ],
       "UUID": "com.isrudoy.spruthub.button",
       "PropertyInspectorPath": "button/index.html",
       "Tooltip": "Trigger Sprut.Hub button events"
@@ -112,7 +132,10 @@
           "Image": "static/img/commonAction"
         }
       ],
-      "Controllers": ["Keypad", "Knob"],
+      "Controllers": [
+        "Keypad",
+        "Knob"
+      ],
       "UUID": "com.isrudoy.spruthub.scenario",
       "PropertyInspectorPath": "scenario/index.html",
       "Tooltip": "Run Sprut.Hub automation scenarios"
@@ -127,7 +150,7 @@
   "Description": "Control Sprut.Hub smart home devices",
   "Category": "Sprut.Hub",
   "CategoryIcon": "static/img/categoryIcon",
-  "Version": "1.0.0",
+  "Version": "1.0.6",
   "OS": [
     {
       "Platform": "mac",

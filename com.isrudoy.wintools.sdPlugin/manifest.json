@@ -8,7 +8,10 @@
           "Image": "static/img/batteryAction"
         }
       ],
-      "Controllers": ["Keypad", "Information"],
+      "Controllers": [
+        "Keypad",
+        "Information"
+      ],
       "Tooltip": "Shows battery level for Razer devices",
       "UUID": "com.isrudoy.wintools.battery",
       "PropertyInspectorPath": "battery/index.html"
@@ -22,7 +25,7 @@
   "Description": "Windows system utilities for StreamDock",
   "Category": "WTools",
   "CategoryIcon": "static/img/categoryIcon",
-  "Version": "1.0.0",
+  "Version": "1.0.6",
   "OS": [
     {
       "Platform": "windows",

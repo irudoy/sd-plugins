@@ -1,6 +1,6 @@
 {
   "name": "com.isrudoy.unifi",
-  "version": "1.0.0",
+  "version": "1.0.6",
   "description": "Unifi Network plugin for StreamDock",
   "main": "plugin/index.js",
   "dependencies": {
