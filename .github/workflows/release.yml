@@ -1,0 +1,251 @@
+name: Release
+
+on:
+  push:
+    branches: [master]
+
+jobs:
+  prepare:
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.version.outputs.version }}
+      version_bumped: ${{ steps.version.outputs.version_bumped }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Lint
+        run: npm run lint
+
+      - name: Typecheck
+        run: npm run typecheck
+
+      - name: Determine version
+        id: version
+        run: |
+          CURRENT_VERSION=$(node -p "require('./package.json').version")
+          echo "Current version: $CURRENT_VERSION"
+
+          if git rev-parse "v$CURRENT_VERSION" >/dev/null 2>&1; then
+            echo "Tag v$CURRENT_VERSION exists, bumping patch version"
+            NEW_VERSION=$(npx semver "$CURRENT_VERSION" -i patch)
+            echo "version=$NEW_VERSION" >> $GITHUB_OUTPUT
+            echo "version_bumped=true" >> $GITHUB_OUTPUT
+          else
+            echo "Tag v$CURRENT_VERSION does not exist, using current version"
+            echo "version=$CURRENT_VERSION" >> $GITHUB_OUTPUT
+            echo "version_bumped=false" >> $GITHUB_OUTPUT
+          fi
+
+          echo "Final version: $(cat $GITHUB_OUTPUT | grep '^version=' | cut -d= -f2)"
+
+  build:
+    needs: prepare
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        include:
+          - plugin: mactools
+            platforms: 'darwin-arm64'
+          - plugin: wintools
+            platforms: 'win32-x64'
+          - plugin: unifi
+            platforms: 'darwin-arm64 win32-x64'
+          - plugin: spruthub
+            platforms: 'darwin-arm64 win32-x64'
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Update version in manifest.json and package.json
+        run: |
+          PLUGIN_DIR="com.isrudoy.${{ matrix.plugin }}.sdPlugin"
+          VERSION="${{ needs.prepare.outputs.version }}"
+
+          # Update manifest.json
+          cd "$PLUGIN_DIR"
+          node -e "
+            const fs = require('fs');
+            const manifest = JSON.parse(fs.readFileSync('manifest.json', 'utf8'));
+            manifest.Version = '$VERSION';
+            fs.writeFileSync('manifest.json', JSON.stringify(manifest, null, 2) + '\n');
+          "
+
+          # Update package.json if exists
+          if [ -f "package.json" ]; then
+            node -e "
+              const fs = require('fs');
+              const pkg = JSON.parse(fs.readFileSync('package.json', 'utf8'));
+              pkg.version = '$VERSION';
+              fs.writeFileSync('package.json', JSON.stringify(pkg, null, 2) + '\n');
+            "
+          fi
+
+      - name: Install production dependencies
+        run: |
+          PLUGIN_DIR="com.isrudoy.${{ matrix.plugin }}.sdPlugin"
+          cd "$PLUGIN_DIR"
+          npm install --omit=optional
+
+      - name: Install platform-specific canvas binaries
+        run: |
+          PLUGIN_DIR="com.isrudoy.${{ matrix.plugin }}.sdPlugin"
+          cd "$PLUGIN_DIR"
+
+          # Check if canvas is a dependency
+          if grep -q "@napi-rs/canvas" package.json 2>/dev/null; then
+            for platform in ${{ matrix.platforms }}; do
+              case $platform in
+                darwin-arm64)
+                  npm install --os=darwin --cpu=arm64
+                  ;;
+                darwin-x64)
+                  npm install --os=darwin --cpu=x64
+                  ;;
+                win32-x64)
+                  npm install --os=win32 --cpu=x64
+                  ;;
+              esac
+            done
+          fi
+
+      - name: Clean up unnecessary files
+        run: |
+          PLUGIN_DIR="com.isrudoy.${{ matrix.plugin }}.sdPlugin"
+          cd "$PLUGIN_DIR"
+
+          # Remove source files
+          find . -name "*.swift" -delete 2>/dev/null || true
+          find . -name "*.c" -delete 2>/dev/null || true
+          find . -name "Makefile" -delete 2>/dev/null || true
+
+          # Remove logs and system files
+          find . -name "*.log" -delete 2>/dev/null || true
+          find . -name ".DS_Store" -delete 2>/dev/null || true
+
+          # Remove package-lock.json
+          rm -f package-lock.json
+
+      - name: Create ZIP archive
+        run: |
+          PLUGIN_DIR="com.isrudoy.${{ matrix.plugin }}.sdPlugin"
+          VERSION="${{ needs.prepare.outputs.version }}"
+          ZIP_NAME="com.isrudoy.${{ matrix.plugin }}.sdPlugin-v${VERSION}.zip"
+
+          zip -r "$ZIP_NAME" "$PLUGIN_DIR"
+          echo "Created: $ZIP_NAME"
+          ls -lh "$ZIP_NAME"
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: com.isrudoy.${{ matrix.plugin }}.sdPlugin
+          path: com.isrudoy.${{ matrix.plugin }}.sdPlugin-v${{ needs.prepare.outputs.version }}.zip
+
+  release:
+    needs: [prepare, build]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Download all artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+
+      - name: List artifacts
+        run: |
+          echo "Downloaded artifacts:"
+          find artifacts -type f -name "*.zip" | while read f; do
+            echo "  - $(basename "$f") ($(du -h "$f" | cut -f1))"
+          done
+
+      - name: Update version in package.json if bumped
+        if: needs.prepare.outputs.version_bumped == 'true'
+        run: |
+          VERSION="${{ needs.prepare.outputs.version }}"
+
+          node -e "
+            const fs = require('fs');
+            const pkg = JSON.parse(fs.readFileSync('package.json', 'utf8'));
+            pkg.version = '$VERSION';
+            fs.writeFileSync('package.json', JSON.stringify(pkg, null, 2) + '\n');
+          "
+
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add package.json
+          git commit -m "chore: release v$VERSION"
+          git push
+
+      - name: Create git tag
+        run: |
+          VERSION="${{ needs.prepare.outputs.version }}"
+          git tag "v$VERSION"
+          git push origin "v$VERSION"
+
+      - name: Generate changelog
+        id: changelog
+        run: |
+          VERSION="${{ needs.prepare.outputs.version }}"
+
+          # Get previous tag
+          PREV_TAG=$(git tag --sort=-v:refname | grep -E '^v[0-9]' | head -2 | tail -1)
+
+          if [ -z "$PREV_TAG" ]; then
+            # No previous tag, get all commits
+            COMMITS=$(git log --pretty=format:"- %s" HEAD)
+          else
+            # Get commits since previous tag
+            COMMITS=$(git log --pretty=format:"- %s" "$PREV_TAG"..HEAD~1)
+          fi
+
+          # Write changelog to file (multi-line handling)
+          echo "## Changes in v$VERSION" > changelog.md
+          echo "" >> changelog.md
+          if [ -n "$COMMITS" ]; then
+            echo "$COMMITS" >> changelog.md
+          else
+            echo "- Initial release" >> changelog.md
+          fi
+          echo "" >> changelog.md
+          echo "## Artifacts" >> changelog.md
+          echo "" >> changelog.md
+          echo "| Plugin | Platforms |" >> changelog.md
+          echo "|--------|-----------|" >> changelog.md
+          echo "| mactools | macOS (ARM64) |" >> changelog.md
+          echo "| wintools | Windows (x64) |" >> changelog.md
+          echo "| unifi | macOS (ARM64) + Windows (x64) |" >> changelog.md
+          echo "| spruthub | macOS (ARM64) + Windows (x64) |" >> changelog.md
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: v${{ needs.prepare.outputs.version }}
+          name: v${{ needs.prepare.outputs.version }}
+          body_path: changelog.md
+          files: artifacts/**/*.zip
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
