@@ -246,6 +246,13 @@ jobs:
           echo "| wintools | Windows (x64) |" >> changelog.md
           echo "| unifi | macOS (ARM64) + Windows (x64) |" >> changelog.md
           echo "| spruthub | macOS (ARM64) + Windows (x64) |" >> changelog.md
+          echo "" >> changelog.md
+          echo "## macOS" >> changelog.md
+          echo "" >> changelog.md
+          echo "After installing, run:" >> changelog.md
+          echo "\`\`\`bash" >> changelog.md
+          echo 'xattr -cr ~/Library/Application\ Support/HotSpot/StreamDock/plugins/com.isrudoy.*.sdPlugin' >> changelog.md
+          echo "\`\`\`" >> changelog.md
 
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
