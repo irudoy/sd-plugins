@@ -80,7 +80,7 @@ jobs:
         with:
           node-version: '20'
 
-      - name: Update version in manifest.json and package.json
+      - name: Update version in manifest.json, package.json and package-lock.json
         run: |
           PLUGIN_DIR="com.isrudoy.${{ matrix.plugin }}.sdPlugin"
           VERSION="${{ needs.prepare.outputs.version }}"
@@ -94,14 +94,9 @@ jobs:
             fs.writeFileSync('manifest.json', JSON.stringify(manifest, null, 2) + '\n');
           "
 
-          # Update package.json if exists
+          # Update package.json and package-lock.json if exist
           if [ -f "package.json" ]; then
-            node -e "
-              const fs = require('fs');
-              const pkg = JSON.parse(fs.readFileSync('package.json', 'utf8'));
-              pkg.version = '$VERSION';
-              fs.writeFileSync('package.json', JSON.stringify(pkg, null, 2) + '\n');
-            "
+            npm version "$VERSION" --no-git-tag-version --allow-same-version
           fi
 
       - name: Install production dependencies
