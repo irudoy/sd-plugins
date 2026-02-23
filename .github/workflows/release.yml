@@ -220,7 +220,7 @@ jobs:
           fi
 
           # Write changelog to file (multi-line handling)
-          echo "## Changes in v$VERSION" > changelog.md
+          echo "## Changes" > changelog.md
           echo "" >> changelog.md
           if [ -n "$COMMITS" ]; then
             echo "$COMMITS" >> changelog.md
@@ -228,6 +228,10 @@ jobs:
             echo "- Initial release" >> changelog.md
           fi
           echo "" >> changelog.md
+          if [ -n "$PREV_TAG" ]; then
+            echo "**Full changelog:** [$PREV_TAG...v$VERSION](https://github.com/${{ github.repository }}/compare/$PREV_TAG...v$VERSION)" >> changelog.md
+            echo "" >> changelog.md
+          fi
           echo "## Artifacts" >> changelog.md
           echo "" >> changelog.md
           echo "| Plugin | Platforms |" >> changelog.md
