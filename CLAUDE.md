@@ -23,6 +23,7 @@ sd-plugins/
 ├── tsconfig.json             # TypeScript for JSDoc type checking
 ├── .prettierrc.json          # 2 spaces, single quotes, semicolons
 ├── .editorconfig
+├── .github/workflows/        # CI/CD (ci.yml, release.yml)
 ├── types/                    # TypeScript declarations
 │   ├── streamdock.d.ts       # Plugin backend types
 │   └── property-inspector.d.ts # PI globals ($settings, $websocket, etc.)
@@ -124,6 +125,58 @@ Plugins can be inspected using Chrome DevTools:
 - Open `chrome://inspect` in Chrome/Chromium browser
 - Or navigate directly to `http://localhost:23519/`
 - Click "inspect" next to the plugin process to open DevTools
+
+## CI/CD
+
+GitHub Actions workflows in `.github/workflows/`:
+
+| Workflow | Trigger | Description |
+|----------|---------|-------------|
+| `ci.yml` | PR to master, push to non-master | Lint + typecheck |
+| `release.yml` | Push to master | Build + release all plugins |
+
+### Versioning
+
+Single version in root `package.json`, synced to all plugins on release.
+
+- **Auto patch bump:** Push to master → if tag `v{version}` exists → increment patch
+- **Manual major/minor:** Change version in `package.json` before push → uses that version
+
+```bash
+# Patch release (automatic)
+git commit -m "fix: something"
+git push origin master
+# → v1.0.1 (auto-incremented from v1.0.0)
+
+# Minor/major release (manual)
+# Edit package.json: "1.0.0" → "1.1.0"
+git commit -m "feat: new feature"
+git push origin master
+# → v1.1.0
+```
+
+### Release Artifacts
+
+| Plugin | Platforms in ZIP |
+|--------|------------------|
+| mactools | darwin-arm64 |
+| wintools | win32-x64 |
+| unifi | darwin-arm64 + win32-x64 |
+| spruthub | darwin-arm64 + win32-x64 |
+
+ZIP includes `node_modules/` with platform-specific `@napi-rs/canvas` binaries.
+
+### macOS Quarantine
+
+Downloaded ZIPs are quarantined by macOS. After installing:
+```bash
+xattr -cr ~/Library/Application\ Support/HotSpot/StreamDock/plugins/com.isrudoy.*.sdPlugin
+```
+
+### Repository Settings
+
+Required for release workflow:
+- Settings → Actions → General → Workflow permissions: **Read and write permissions**
 
 ## mactools (com.isrudoy.mactools)
 
