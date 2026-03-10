@@ -8,7 +8,10 @@
           "Image": "static/img/commonAction"
         }
       ],
-      "Controllers": ["Keypad", "Knob"],
+      "Controllers": [
+        "Keypad",
+        "Knob"
+      ],
       "UUID": "com.isrudoy.acontrol.speakers",
       "PropertyInspectorPath": "speakers/index.html",
       "Tooltip": "Control Adam Audio A-Series speakers"
@@ -23,7 +26,7 @@
   "Description": "Control Adam Audio A-Series speakers via OCA/AES70 protocol",
   "Category": "A Control",
   "CategoryIcon": "static/img/categoryIcon",
-  "Version": "1.0.0",
+  "Version": "1.1.0",
   "OS": [
     {
       "Platform": "mac",
