@@ -711,13 +711,16 @@ function renderKnobState(state, settings) {
   ctx.font = 'bold 14px sans-serif';
   ctx.fillText(infoText, KNOB_LAYOUT.nameX, 45);
 
-  // Line 2: Volume level (or N/A if Backplate mode)
+  // Line 2: Volume level (or Muted / N/A)
   ctx.fillStyle = textColor;
   ctx.font = 'bold 24px sans-serif';
   if (state.connecting) {
     ctx.fillText('Connecting...', KNOB_LAYOUT.nameX, 75);
   } else if (state.error) {
     ctx.fillText('No speakers', KNOB_LAYOUT.nameX, 75);
+  } else if (state.muted) {
+    ctx.fillStyle = iconColor;
+    ctx.fillText('Muted', KNOB_LAYOUT.nameX, 75);
   } else if (volumeUnavailable) {
     ctx.fillStyle = COLORS.gray;
     ctx.fillText('Vol. N/A', KNOB_LAYOUT.nameX, 75);
@@ -725,11 +728,13 @@ function renderKnobState(state, settings) {
     ctx.fillText(formatLevel(state.level), KNOB_LAYOUT.nameX, 75);
   }
 
-  // Line 3: Status (Muted/DIM/action hint)
+  // Line 3: Status (DIM/action hint)
   ctx.fillStyle = iconColor;
   ctx.font = 'bold 16px sans-serif';
   if (state.muted) {
-    ctx.fillText('Muted', KNOB_LAYOUT.statusX, 105);
+    // Show level when muted as secondary info
+    ctx.fillStyle = COLORS.gray;
+    ctx.fillText(formatLevel(state.level), KNOB_LAYOUT.statusX, 105);
   } else if (state.dimmed) {
     ctx.fillText('DIM active', KNOB_LAYOUT.statusX, 105);
   } else if (volumeUnavailable && settings.dialAction === 'volume') {
