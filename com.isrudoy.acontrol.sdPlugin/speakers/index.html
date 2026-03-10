@@ -1,0 +1,94 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, minimum-scale=1, user-scalable=no">
+    <title>A Control - Speakers</title>
+    <link rel="stylesheet" href="../static/css/sdpi.css">
+    <link rel="stylesheet" href="../pi-lib/styles.css">
+    <script src="../static/common.js"></script>
+    <script src="../static/sd-action.js"></script>
+    <script src="../pi-lib/common.js"></script>
+</head>
+<body>
+    <div class="sdpi-wrapper" style="display: none;">
+
+        <!-- Speaker Status -->
+        <div class="sdpi-heading">Connection</div>
+        <div id="speakerStatus" class="speaker-status">
+            <h4>Speakers</h4>
+            <div class="status-message status-info">Searching for speakers...</div>
+        </div>
+
+        <div class="sdpi-item">
+            <div class="sdpi-item-label empty"></div>
+            <button class="sdpi-item-value refresh-btn" id="refreshBtn" onclick="AControlPI.refreshSpeakers()">Refresh</button>
+        </div>
+
+        <div class="sdpi-item">
+            <div class="sdpi-item-label empty"></div>
+            <button class="sdpi-item-value refresh-btn" onclick="AControlPI.blinkLED()">Blink LED</button>
+        </div>
+
+        <!-- Press Action -->
+        <div class="sdpi-heading">Press Action</div>
+
+        <div class="sdpi-item">
+            <div class="sdpi-item-label">On Press</div>
+            <select class="sdpi-item-value" id="pressAction" onchange="AControlPI.saveSettings()">
+                <option value="mute">Mute</option>
+                <option value="dim">DIM</option>
+                <option value="sleep">Sleep</option>
+                <optgroup label="Input">
+                    <option value="input">Cycle</option>
+                    <option value="input_rca">RCA</option>
+                    <option value="input_xlr">XLR</option>
+                </optgroup>
+                <optgroup label="Voicing">
+                    <option value="voicing_pure">Pure</option>
+                    <option value="voicing_unr">UNR</option>
+                    <option value="voicing_ext">Ext.</option>
+                </optgroup>
+            </select>
+        </div>
+
+        <div class="sdpi-item" id="dimLevelRow">
+            <div class="sdpi-item-label">DIM Level</div>
+            <select class="sdpi-item-value" id="dimLevel" onchange="AControlPI.saveSettings()">
+                <option value="-10">-10 dB</option>
+                <option value="-20" selected>-20 dB</option>
+                <option value="-30">-30 dB</option>
+            </select>
+        </div>
+        <p class="help-text" id="dimHelp" style="margin-left: 100px; margin-top: -5px;">
+            DIM only works in Advanced mode (Ext. voicing).
+        </p>
+
+        <!-- Dial Action (Knob only) -->
+        <div class="sdpi-heading">Dial Action (Knob)</div>
+
+        <div class="sdpi-item">
+            <div class="sdpi-item-label">On Rotate</div>
+            <select class="sdpi-item-value" id="dialAction" onchange="AControlPI.saveSettings()">
+                <option value="volume">Volume</option>
+                <option value="none">None</option>
+            </select>
+        </div>
+
+        <div class="sdpi-item" id="volumeStepRow">
+            <div class="sdpi-item-label">Volume Step</div>
+            <select class="sdpi-item-value" id="volumeStep" onchange="AControlPI.saveSettings()">
+                <option value="1">0.5 dB per tick</option>
+                <option value="2" selected>1.0 dB per tick</option>
+                <option value="4">2.0 dB per tick</option>
+            </select>
+        </div>
+        <p class="help-text" id="volumeHelp" style="margin-left: 100px; margin-top: -5px;">
+            Volume control only works in Advanced mode (Ext. voicing).
+        </p>
+
+    </div>
+
+    <script src="index.js"></script>
+</body>
+</html>

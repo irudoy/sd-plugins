@@ -10,6 +10,7 @@ Monorepo for StreamDock plugins. Cross-platform: macOS + Windows.
 | unifi | `com.isrudoy.unifi` | VPN Status - Unifi Network VPN client | macOS + Windows |
 | wintools | `com.isrudoy.wintools` | Battery Monitor (Razer devices) | Windows only |
 | spruthub | `com.isrudoy.spruthub` | Sprut.Hub smart home control (9 actions) | macOS + Windows |
+| acontrol | `com.isrudoy.acontrol` | Adam Audio A-Series speaker control | macOS + Windows |
 
 **Architecture:** Node.js backend + HTML/JS Property Inspector
 **SDK:** StreamDock SDK (NOT Elgato Stream Deck SDK)
@@ -43,23 +44,34 @@ sd-plugins/
 │   ├── plugin/
 │   ├── vpn/
 │   └── static/
-└── com.isrudoy.spruthub.sdPlugin/
+├── com.isrudoy.spruthub.sdPlugin/
+│   ├── package.json
+│   ├── package-lock.json
+│   ├── manifest.json
+│   ├── plugin/               # Node.js backend
+│   │   ├── index.js          # Entry point, event routing
+│   │   ├── lib/              # Shared modules
+│   │   └── actions/          # Device actions (9 types)
+│   ├── light/                # Property Inspectors (one per action)
+│   ├── switch/
+│   ├── outlet/
+│   ├── lock/
+│   ├── cover/
+│   ├── thermostat/
+│   ├── sensor/
+│   ├── button/
+│   ├── scenario/
+│   └── static/               # SDK (not linted)
+└── com.isrudoy.acontrol.sdPlugin/
     ├── package.json
     ├── package-lock.json
     ├── manifest.json
     ├── plugin/               # Node.js backend
     │   ├── index.js          # Entry point, event routing
-    │   ├── lib/              # Shared modules
-    │   └── actions/          # Device actions (9 types)
-    ├── light/                # Property Inspectors (one per action)
-    ├── switch/
-    ├── outlet/
-    ├── lock/
-    ├── cover/
-    ├── thermostat/
-    ├── sensor/
-    ├── button/
-    ├── scenario/
+    │   ├── lib/              # Shared modules (OCA protocol, speaker manager)
+    │   └── actions/          # speakers.js (single universal action)
+    ├── speakers/             # Property Inspector
+    ├── pi-lib/               # Shared PI code
     └── static/               # SDK (not linted)
 ```
 
@@ -163,6 +175,7 @@ git push origin master
 | wintools | win32-x64 |
 | unifi | darwin-arm64 + win32-x64 |
 | spruthub | darwin-arm64 + win32-x64 |
+| acontrol | darwin-arm64 + win32-x64 |
 
 ZIP includes `node_modules/` with platform-specific `@napi-rs/canvas` binaries.
 
@@ -223,6 +236,91 @@ GET /proxy/network/api/s/default/rest/networkconf     # VPN list
 GET /proxy/network/v2/api/site/default/vpn/connections # VPN status
 Headers: X-API-KEY: <key>, Accept: application/json
 ```
+
+## acontrol (com.isrudoy.acontrol)
+
+Adam Audio A-Series speaker control via OCA/AES70 protocol over UDP.
+
+### Features
+
+- Auto-discovery via mDNS (`_oca._udp.local.`)
+- Broadcast control — all speakers receive commands simultaneously
+- Supports both Keypad and Knob controllers
+
+### Actions
+
+| Action | UUID | Description |
+|--------|------|-------------|
+| Speakers | `com.isrudoy.acontrol.speakers` | Universal speaker control (Keypad + Knob) |
+
+### Press Actions (configurable)
+
+| Action | Description |
+|--------|-------------|
+| Mute | Toggle mute/unmute |
+| DIM | Reduce volume by configurable amount (-10/-20/-30 dB) |
+| Sleep | Toggle sleep/wake |
+| Input | Cycle RCA ↔ XLR or set specific input |
+| Voicing | Set Pure/UNR/Ext. mode |
+
+### Dial Action (Knob only)
+
+- Volume control with configurable step (0.5/1.0/2.0 dB per tick)
+- Optimistic UI updates (immediate visual feedback, debounced API call)
+
+### Voicing Modes & Volume Control
+
+| Voicing | Mode | Volume Control |
+|---------|------|----------------|
+| Pure (0) | Backplate | Physical knob on speaker |
+| UNR (1) | Backplate | Physical knob on speaker |
+| Ext. (2) | Advanced/SoundID | OCA protocol (this plugin) |
+
+**Important:** Volume and DIM only work in Ext. voicing mode. In Pure/UNR modes, UI shows "Vol. N/A" or "N/A (Backplate)".
+
+### Module Structure
+
+```
+plugin/
+├── index.js              # Entry point, WebSocket, event routing
+├── lib/
+│   ├── common.js         # Constants, colors, logging
+│   ├── state.js          # Contexts, dial debounce
+│   ├── websocket.js      # setImage, sendToPropertyInspector
+│   ├── oca-protocol.js   # OCA/AES70 binary protocol encoding/decoding
+│   ├── adam-audio.js     # AdamAudioClient: UDP connection, commands
+│   ├── mdns-discovery.js # mDNS speaker discovery
+│   ├── speaker-manager.js # SpeakerManager: broadcast, state sync
+│   └── draw-common.js    # Canvas drawing, icons
+└── actions/
+    └── speakers.js       # Single universal action
+```
+
+### OCA Protocol
+
+Binary protocol over UDP port 49494:
+- 10-byte header: Sync (0x3B) + Version + Size + PDU Type + Count
+- Types: Command (0x01), Response (0x03), Keepalive (0x04)
+- Keepalive every ~1 second to maintain connection
+
+### Speaker Manager
+
+Singleton that manages all discovered speakers:
+- `addRef()` / `removeRef()` — reference counting (stays connected while plugin runs)
+- `broadcast(method, ...args)` — send command to all speakers
+- `getState()` — cached state (read from any speaker, they're physically synced)
+- All toggle/cycle methods use explicit set values to avoid sync issues
+
+### Icons
+
+Action-specific icons on Keypad:
+- **Mute** — speaker with sound waves (or X when muted)
+- **DIM** — speaker with faded waves
+- **Sleep** — moon
+- **Input** — RCA (single plug) or XLR (3-pin connector)
+- **Voicing** — Pure (straight lines), UNR (wavy lines), Ext. (lines with sliders)
+
+Knob always shows speaker icon (main function is volume control).
 
 ## spruthub (com.isrudoy.spruthub)
 

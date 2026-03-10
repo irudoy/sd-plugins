@@ -7,9 +7,9 @@
 /* global document, window, $settings, $websocket, SprutHubPI */
 
 // SDK configuration (required by sd-action.js)
-// eslint-disable-next-line no-unused-vars
+
 const $local = false;
-// eslint-disable-next-line no-unused-vars
+
 const $back = false;
 
 /** @type {HTMLSelectElement|null} */
@@ -143,7 +143,6 @@ const { $propEvent: basePropEvent } = SprutHubPI.initConnection({
   onSendToPropertyInspector: handleSendToPI,
 });
 
-// eslint-disable-next-line no-unused-vars
 const $propEvent = {
   /**
    * @param {{ settings: Record<string, unknown> }} data

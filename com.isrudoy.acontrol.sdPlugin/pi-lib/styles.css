@@ -1,0 +1,94 @@
+/**
+ * A Control Property Inspector Styles
+ */
+
+/* Status messages */
+.status-message {
+  padding: 8px 12px;
+  margin: 8px 0;
+  border-radius: 4px;
+  font-size: 12px;
+}
+
+.status-success {
+  background-color: rgba(76, 175, 80, 0.2);
+  border: 1px solid #4CAF50;
+  color: #4CAF50;
+}
+
+.status-error {
+  background-color: rgba(255, 111, 145, 0.2);
+  border: 1px solid #FF6F91;
+  color: #FF6F91;
+}
+
+.status-info {
+  background-color: rgba(255, 193, 7, 0.2);
+  border: 1px solid #FFC107;
+  color: #FFC107;
+}
+
+/* Speaker status panel */
+.speaker-status {
+  padding: 10px;
+  margin: 8px 0;
+  background-color: rgba(255, 255, 255, 0.05);
+  border-radius: 4px;
+}
+
+.speaker-status h4 {
+  margin: 0 0 8px 0;
+  font-size: 12px;
+  color: #888;
+  text-transform: uppercase;
+}
+
+.speaker-list {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+}
+
+.speaker-list li {
+  padding: 4px 0;
+  font-size: 13px;
+  color: #fff;
+}
+
+.speaker-list li::before {
+  content: '● ';
+  color: #4CAF50;
+}
+
+.speaker-list.disconnected li::before {
+  color: #888;
+}
+
+/* Buttons */
+.refresh-btn {
+  background-color: #3c3c3c;
+  border: 1px solid #4c4c4c;
+  color: #fff;
+  padding: 6px 12px;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 12px;
+  transition: background-color 0.2s;
+}
+
+.refresh-btn:hover {
+  background-color: #4c4c4c;
+}
+
+.refresh-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+/* Help text */
+.help-text {
+  font-size: 11px;
+  color: #888;
+  margin-top: 4px;
+  line-height: 1.4;
+}

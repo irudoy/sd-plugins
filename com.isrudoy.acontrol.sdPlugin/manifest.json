@@ -1,0 +1,43 @@
+{
+  "Actions": [
+    {
+      "Icon": "static/img/speakerIcon",
+      "Name": "Speakers",
+      "States": [
+        {
+          "Image": "static/img/commonAction"
+        }
+      ],
+      "Controllers": ["Keypad", "Knob"],
+      "UUID": "com.isrudoy.acontrol.speakers",
+      "PropertyInspectorPath": "speakers/index.html",
+      "Tooltip": "Control Adam Audio A-Series speakers"
+    }
+  ],
+  "SDKVersion": 1,
+  "Author": "isrudoy",
+  "Name": "A Control",
+  "Icon": "static/img/pluginIcon",
+  "CodePathMac": "plugin/index.js",
+  "CodePathWin": "plugin/index.js",
+  "Description": "Control Adam Audio A-Series speakers via OCA/AES70 protocol",
+  "Category": "A Control",
+  "CategoryIcon": "static/img/categoryIcon",
+  "Version": "1.0.0",
+  "OS": [
+    {
+      "Platform": "mac",
+      "MinimumVersion": "10.11"
+    },
+    {
+      "Platform": "windows",
+      "MinimumVersion": "7"
+    }
+  ],
+  "Software": {
+    "MinimumVersion": "3.10.188.226"
+  },
+  "Nodejs": {
+    "Version": "20"
+  }
+}
