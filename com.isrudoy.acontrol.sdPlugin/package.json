@@ -1,6 +1,6 @@
 {
   "name": "com.isrudoy.acontrol",
-  "version": "1.1.0",
+  "version": "1.1.1",
   "description": "Adam Audio A-Series speaker control for StreamDock",
   "main": "plugin/index.js",
   "dependencies": {

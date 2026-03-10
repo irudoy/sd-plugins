@@ -59,7 +59,7 @@
   "Description": "macOS system utilities for StreamDock",
   "Category": "Mac Tools",
   "CategoryIcon": "static/img/categoryIcon",
-  "Version": "1.1.0",
+  "Version": "1.1.1",
   "OS": [
     {
       "Platform": "mac",

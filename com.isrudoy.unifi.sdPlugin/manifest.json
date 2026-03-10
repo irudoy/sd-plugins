@@ -26,7 +26,7 @@
   "Description": "Monitor Unifi Network VPN connections",
   "Category": "Unifi Network",
   "CategoryIcon": "static/img/categoryIcon",
-  "Version": "1.1.0",
+  "Version": "1.1.1",
   "OS": [
     {
       "Platform": "mac",
