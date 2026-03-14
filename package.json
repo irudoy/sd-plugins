@@ -14,10 +14,10 @@
     "link:spruthub": "ln -sf \"$(pwd)/com.isrudoy.spruthub.sdPlugin\" \"$HOME/Library/Application Support/HotSpot/StreamDock/plugins/com.isrudoy.spruthub.sdPlugin\"",
     "link:acontrol": "ln -sf \"$(pwd)/com.isrudoy.acontrol.sdPlugin\" \"$HOME/Library/Application Support/HotSpot/StreamDock/plugins/com.isrudoy.acontrol.sdPlugin\"",
     "unlink": "rm -f \"$HOME/Library/Application Support/HotSpot/StreamDock/plugins/com.isrudoy.mactools.sdPlugin\" \"$HOME/Library/Application Support/HotSpot/StreamDock/plugins/com.isrudoy.unifi.sdPlugin\" \"$HOME/Library/Application Support/HotSpot/StreamDock/plugins/com.isrudoy.spruthub.sdPlugin\" \"$HOME/Library/Application Support/HotSpot/StreamDock/plugins/com.isrudoy.acontrol.sdPlugin\"",
-    "link:win:spruthub": "cmd.exe /c scripts\\link-win.cmd com.isrudoy.spruthub",
-    "link:win:unifi": "cmd.exe /c scripts\\link-win.cmd com.isrudoy.unifi",
-    "link:win:wintools": "cmd.exe /c scripts\\link-win.cmd com.isrudoy.wintools",
-    "link:win:acontrol": "cmd.exe /c scripts\\link-win.cmd com.isrudoy.acontrol",
+    "link:win:spruthub": "cmd.exe /c \"$(wslpath -w scripts/link-win.cmd)\" com.isrudoy.spruthub",
+    "link:win:unifi": "cmd.exe /c \"$(wslpath -w scripts/link-win.cmd)\" com.isrudoy.unifi",
+    "link:win:wintools": "cmd.exe /c \"$(wslpath -w scripts/link-win.cmd)\" com.isrudoy.wintools",
+    "link:win:acontrol": "cmd.exe /c \"$(wslpath -w scripts/link-win.cmd)\" com.isrudoy.acontrol",
     "install:all": "for d in com.isrudoy.*.sdPlugin; do (cd \"$d\" && npm install); done"
   },
   "devDependencies": {

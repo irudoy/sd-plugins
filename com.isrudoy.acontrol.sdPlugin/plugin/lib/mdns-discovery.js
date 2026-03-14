@@ -7,9 +7,30 @@
 
 /** @type {typeof import('multicast-dns')} */
 const mdns = require('multicast-dns');
+const os = require('os');
+const { log } = require('./common');
 
 const OCA_SERVICE = '_oca._udp.local';
 const DISCOVERY_TIMEOUT = 3000; // 3 seconds
+
+/**
+ * Get all external IPv4 interface addresses for multicast
+ * @returns {string[]}
+ */
+function getMulticastInterfaces() {
+  const interfaces = os.networkInterfaces();
+  /** @type {string[]} */
+  const result = [];
+  for (const addrs of Object.values(interfaces)) {
+    if (!addrs) continue;
+    for (const addr of addrs) {
+      if (addr.family === 'IPv4' && !addr.internal) {
+        result.push(addr.address);
+      }
+    }
+  }
+  return result;
+}
 
 /**
  * @typedef {Object} Speaker
@@ -31,14 +52,25 @@ async function discoverSpeakers(timeout = DISCOVERY_TIMEOUT) {
     /** @type {Map<string, {name: string, port: number}>} */
     const pendingSRV = new Map();
 
-    const client = mdns();
+    // Query on all non-internal interfaces to handle virtual adapters (WSL, Docker, etc.)
+    const ifaces = getMulticastInterfaces();
+    /** @type {ReturnType<typeof mdns>[]} */
+    const clients =
+      ifaces.length > 0 ? ifaces.map((iface) => mdns({ interface: iface })) : [mdns()];
 
-    const timeoutId = setTimeout(() => {
-      client.destroy();
+    log('[mDNS] Discovery on interfaces:', ifaces.join(', ') || 'default');
+
+    const destroyAll = () => {
+      for (const c of clients) c.destroy();
+    };
+
+    const _timeoutId = setTimeout(() => {
+      destroyAll();
       resolve(Array.from(speakers.values()));
     }, timeout);
 
-    client.on('response', (response) => {
+    /** @param {import('multicast-dns').ResponsePacket} response */
+    const handleResponse = (response) => {
       // Process PTR records (service instances)
       for (const answer of response.answers) {
         if (answer.type === 'PTR' && answer.name === OCA_SERVICE) {
@@ -98,114 +130,19 @@ async function discoverSpeakers(timeout = DISCOVERY_TIMEOUT) {
           }
         }
       }
-    });
+    };
 
-    client.on('error', () => {
-      clearTimeout(timeoutId);
-      client.destroy();
-      resolve(Array.from(speakers.values()));
-    });
-
-    // Send mDNS query for OCA service
-    client.query({
-      questions: [
-        {
-          name: OCA_SERVICE,
-          type: 'PTR',
-        },
-      ],
-    });
+    for (const client of clients) {
+      client.on('response', handleResponse);
+      client.on('error', (/** @type {Error} */ err) => {
+        log('[mDNS] Error:', err.message);
+      });
+      client.query({ questions: [{ name: OCA_SERVICE, type: 'PTR' }] });
+    }
   });
-}
-
-/**
- * @typedef {Object} MdnsBrowser
- * @property {() => void} start - Start the browser
- * @property {() => void} stop - Stop the browser
- * @property {() => Speaker[]} getSpeakers - Get list of discovered speakers
- * @property {(event: string, listener: Function) => void} on - Add event listener
- * @property {(event: string, ...args: unknown[]) => void} emit - Emit event
- */
-
-/**
- * Create a continuous mDNS browser that emits events when speakers are found/lost
- * @returns {MdnsBrowser} Browser with start(), stop() methods and 'found'/'lost' events
- */
-function createBrowser() {
-  const { EventEmitter } = require('events');
-  /** @type {MdnsBrowser & import('events').EventEmitter} */
-  const browser = /** @type {MdnsBrowser & import('events').EventEmitter} */ (new EventEmitter());
-
-  /** @type {Map<string, Speaker>} */
-  const knownSpeakers = new Map();
-
-  /** @type {ReturnType<typeof mdns> | null} */
-  let client = null;
-
-  /** @type {ReturnType<typeof setInterval> | null} */
-  let pollInterval = null;
-
-  browser.start = () => {
-    if (client) {
-      return;
-    }
-
-    client = mdns();
-
-    client.on('response', (response) => {
-      // Process responses similar to discoverSpeakers
-      for (const answer of response.answers.concat(response.additionals || [])) {
-        if (answer.type === 'A' && answer.name.startsWith('ASeries-')) {
-          const name = answer.name.replace('.local', '');
-          const ip = /** @type {string} */ (answer.data);
-
-          if (!knownSpeakers.has(name)) {
-            const speaker = { name, ip, port: 49494 };
-            knownSpeakers.set(name, speaker);
-            browser.emit('found', speaker);
-          }
-        }
-      }
-    });
-
-    client.on('error', () => {
-      // Silently handle errors
-    });
-
-    // Send initial query
-    client.query({
-      questions: [{ name: OCA_SERVICE, type: 'PTR' }],
-    });
-
-    // Periodically re-query to find new speakers
-    pollInterval = setInterval(() => {
-      if (client) {
-        client.query({
-          questions: [{ name: OCA_SERVICE, type: 'PTR' }],
-        });
-      }
-    }, 30000); // Every 30 seconds
-  };
-
-  browser.stop = () => {
-    if (pollInterval) {
-      clearInterval(pollInterval);
-      pollInterval = null;
-    }
-    if (client) {
-      client.destroy();
-      client = null;
-    }
-    knownSpeakers.clear();
-  };
-
-  browser.getSpeakers = () => Array.from(knownSpeakers.values());
-
-  return browser;
 }
 
 module.exports = {
   discoverSpeakers,
-  createBrowser,
   DISCOVERY_TIMEOUT,
 };

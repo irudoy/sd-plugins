@@ -71,7 +71,7 @@ class SpeakerManager extends EventEmitter {
   }
 
   /**
-   * Start speaker discovery
+   * Start speaker discovery — try cached IPs first, fall back to mDNS
    * @returns {Promise<Speaker[]>}
    */
   async startDiscovery() {
@@ -80,9 +80,21 @@ class SpeakerManager extends EventEmitter {
     }
 
     this.discovering = true;
-    log('Starting speaker discovery...');
 
     try {
+      // Try cached speakers first (skip mDNS on reconnect)
+      if (this.speakers.length > 0) {
+        log('Reconnecting to cached speakers...');
+        await this.connectAll();
+        if (this.clients.size > 0) {
+          this.reconnectAttempts = 0;
+          this.emit('discovered', this.speakers);
+          return this.speakers;
+        }
+        log('Cached speakers unreachable, falling back to mDNS');
+      }
+
+      log('Starting mDNS discovery...');
       this.speakers = await discoverSpeakers();
       log(`Discovered ${this.speakers.length} speaker(s)`);
 
