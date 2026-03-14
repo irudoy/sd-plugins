@@ -18,7 +18,8 @@
     "link:win:unifi": "cmd.exe /c \"$(wslpath -w scripts/link-win.cmd)\" com.isrudoy.unifi",
     "link:win:wintools": "cmd.exe /c \"$(wslpath -w scripts/link-win.cmd)\" com.isrudoy.wintools",
     "link:win:acontrol": "cmd.exe /c \"$(wslpath -w scripts/link-win.cmd)\" com.isrudoy.acontrol",
-    "install:all": "for d in com.isrudoy.*.sdPlugin; do (cd \"$d\" && npm install); done"
+    "install:all": "for d in com.isrudoy.*.sdPlugin; do (cd \"$d\" && npm install); done",
+    "install:all:win": "for d in com.isrudoy.*.sdPlugin; do (cd \"$d\" && npm install && npm install --os=win32 --cpu=x64); done"
   },
   "devDependencies": {
     "@eslint/js": "9.18.0",
