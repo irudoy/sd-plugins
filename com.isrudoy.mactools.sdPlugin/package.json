@@ -1,6 +1,6 @@
 {
   "name": "com.isrudoy.mactools",
-  "version": "1.1.2",
+  "version": "1.2.0",
   "description": "macOS system utilities for StreamDock",
   "main": "plugin/index.js",
   "dependencies": {
