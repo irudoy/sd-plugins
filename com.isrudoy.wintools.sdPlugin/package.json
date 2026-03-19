@@ -1,6 +1,6 @@
 {
   "name": "com.isrudoy.wintools",
-  "version": "1.2.1",
+  "version": "1.2.2",
   "description": "Windows system utilities for StreamDock",
   "main": "plugin/index.js",
   "dependencies": {

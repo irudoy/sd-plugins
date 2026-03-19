@@ -150,7 +150,7 @@
   "Description": "Control Sprut.Hub smart home devices",
   "Category": "Sprut.Hub",
   "CategoryIcon": "static/img/categoryIcon",
-  "Version": "1.2.1",
+  "Version": "1.2.2",
   "OS": [
     {
       "Platform": "mac",

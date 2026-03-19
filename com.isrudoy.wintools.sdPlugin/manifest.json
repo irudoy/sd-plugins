@@ -25,7 +25,7 @@
   "Description": "Windows system utilities for StreamDock",
   "Category": "WTools",
   "CategoryIcon": "static/img/categoryIcon",
-  "Version": "1.2.1",
+  "Version": "1.2.2",
   "OS": [
     {
       "Platform": "windows",
