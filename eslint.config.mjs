@@ -44,6 +44,9 @@ export default [
       '**/button/**/*.js',
       '**/scenario/**/*.js',
       '**/speakers/**/*.js',
+      '**/output/**/*.js',
+      '**/mixer/**/*.js',
+      '**/preset/**/*.js',
       '**/pi-lib/**/*.js',
     ],
     languageOptions: {
@@ -61,6 +64,7 @@ export default [
         // Shared PI libraries
         SprutHubPI: 'readonly',
         AControlPI: 'readonly',
+        AntelopePI: 'readonly',
       },
     },
     rules: {

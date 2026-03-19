@@ -1,0 +1,70 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, minimum-scale=1, user-scalable=no">
+    <title>Antelope Control - Output</title>
+    <link rel="stylesheet" href="../static/css/sdpi.css">
+    <link rel="stylesheet" href="../pi-lib/styles.css">
+    <script src="../static/common.js"></script>
+    <script src="../static/sd-action.js"></script>
+    <script src="../pi-lib/common.js"></script>
+</head>
+<body>
+    <div class="sdpi-wrapper" style="display: none;">
+
+        <!-- Connection Status -->
+        <div class="sdpi-heading">Connection</div>
+        <div id="connectionStatus" class="connection-status">
+            <div class="status-message status-info">Checking connection...</div>
+        </div>
+
+        <!-- Output Selection -->
+        <div class="sdpi-heading">Output</div>
+
+        <div class="sdpi-item">
+            <div class="sdpi-item-label">Output</div>
+            <select class="sdpi-item-value" id="outputId" data-setting="outputId" data-type="number" onchange="AntelopePI.saveSettings()">
+                <option value="0">Monitor</option>
+                <option value="1">HP1</option>
+                <option value="2">HP2</option>
+                <option value="3">Line Out</option>
+            </select>
+        </div>
+
+        <!-- Press Action -->
+        <div class="sdpi-heading">Press Action</div>
+
+        <div class="sdpi-item">
+            <div class="sdpi-item-label">On Press</div>
+            <select class="sdpi-item-value" id="pressAction" data-setting="pressAction" onchange="AntelopePI.saveSettings()">
+                <option value="mute">Mute</option>
+                <option value="dim">DIM (-20dB)</option>
+            </select>
+        </div>
+
+        <!-- Dial Action (Knob only) -->
+        <div class="sdpi-heading">Dial Action (Knob)</div>
+
+        <div class="sdpi-item">
+            <div class="sdpi-item-label">On Rotate</div>
+            <select class="sdpi-item-value" id="dialAction" data-setting="dialAction" onchange="AntelopePI.saveSettings(); updateVisibility();">
+                <option value="volume">Volume</option>
+                <option value="none">None</option>
+            </select>
+        </div>
+
+        <div class="sdpi-item" id="volumeStepRow">
+            <div class="sdpi-item-label">Step</div>
+            <select class="sdpi-item-value" id="volumeStep" data-setting="volumeStep" data-type="number" onchange="AntelopePI.saveSettings()">
+                <option value="1">1 per tick</option>
+                <option value="5" selected>5 per tick</option>
+                <option value="10">10 per tick</option>
+            </select>
+        </div>
+
+    </div>
+
+    <script src="index.js"></script>
+</body>
+</html>

@@ -96,7 +96,7 @@ const { createCanvas } = require('@napi-rs/canvas');
 // ============================================================
 
 /** @type {boolean} */
-const DEBUG = false;
+const DEBUG = !process.env.CI;
 
 /** @type {string} */
 const logFile = path.join(__dirname, 'plugin.log');

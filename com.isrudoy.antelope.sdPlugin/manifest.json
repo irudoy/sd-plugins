@@ -1,0 +1,62 @@
+{
+  "Actions": [
+    {
+      "Icon": "static/img/outputAction",
+      "Name": "Output",
+      "States": [
+        {
+          "Image": "static/img/outputAction"
+        }
+      ],
+      "Controllers": [
+        "Keypad",
+        "Knob"
+      ],
+      "UUID": "com.isrudoy.antelope.output",
+      "PropertyInspectorPath": "output/index.html",
+      "Tooltip": "Control Zen Quadro outputs (volume, mute, dim)"
+    },
+    {
+      "Icon": "static/img/mixerAction",
+      "Name": "Mixer",
+      "States": [
+        {
+          "Image": "static/img/mixerAction"
+        }
+      ],
+      "Controllers": [
+        "Keypad",
+        "Knob"
+      ],
+      "UUID": "com.isrudoy.antelope.mixer",
+      "PropertyInspectorPath": "mixer/index.html",
+      "Tooltip": "Control Zen Quadro mixer channels"
+    }
+  ],
+  "SDKVersion": 1,
+  "Author": "isrudoy",
+  "Name": "Antelope Control",
+  "Icon": "static/img/pluginIcon",
+  "CodePathMac": "plugin/index.js",
+  "CodePathWin": "plugin/index.js",
+  "Description": "Control Antelope Audio Zen Quadro SC",
+  "Category": "Antelope Control",
+  "CategoryIcon": "static/img/categoryIcon",
+  "Version": "1.0.0",
+  "OS": [
+    {
+      "Platform": "mac",
+      "MinimumVersion": "10.11"
+    },
+    {
+      "Platform": "windows",
+      "MinimumVersion": "7"
+    }
+  ],
+  "Software": {
+    "MinimumVersion": "3.10.188.226"
+  },
+  "Nodejs": {
+    "Version": "20"
+  }
+}

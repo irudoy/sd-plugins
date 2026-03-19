@@ -73,6 +73,8 @@ jobs:
             platforms: 'darwin-arm64 win32-x64'
           - plugin: acontrol
             platforms: 'darwin-arm64 win32-x64'
+          - plugin: antelope
+            platforms: 'darwin-arm64 win32-x64'
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -273,6 +275,7 @@ jobs:
           echo "| unifi | macOS (ARM64) + Windows (x64) |" >> changelog.md
           echo "| spruthub | macOS (ARM64) + Windows (x64) |" >> changelog.md
           echo "| acontrol | macOS (ARM64) + Windows (x64) |" >> changelog.md
+          echo "| antelope | macOS (ARM64) + Windows (x64) |" >> changelog.md
           echo "" >> changelog.md
           echo "## macOS" >> changelog.md
           echo "" >> changelog.md
