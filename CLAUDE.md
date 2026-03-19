@@ -30,7 +30,7 @@ sd-plugins/
 │   ├── streamdock.d.ts       # Plugin backend types
 │   └── property-inspector.d.ts # PI globals ($settings, $websocket, etc.)
 ├── com.isrudoy.mactools.sdPlugin/
-│   ├── package.json          # Runtime dependencies (ws, node-canvas)
+│   ├── package.json          # Runtime dependencies (ws, @napi-rs/canvas)
 │   ├── package-lock.json
 │   ├── manifest.json
 │   ├── plugin/               # Node.js backend
@@ -129,15 +129,21 @@ npm run link:win:wintools                            # Create Windows symlink (r
 
 ### Scripts (from root)
 ```bash
-npm run lint          # ESLint check
-npm run fmt           # ESLint + Prettier fix
-npm run typecheck     # TypeScript check (JSDoc)
-npm run restart       # Restart StreamDock app (macOS)
-npm run link          # Link all plugins (macOS)
-npm run link:mactools # Link mactools only (macOS)
-npm run link:unifi    # Link unifi only (macOS)
-npm run link:spruthub # Link spruthub only (macOS)
-npm run unlink        # Remove symlinks (macOS)
+npm run lint            # ESLint check
+npm run fmt             # ESLint + Prettier fix
+npm run typecheck       # TypeScript check (JSDoc)
+npm run install:all     # Install deps in all plugin directories
+npm run install:all:win # Install deps + Windows binaries for all plugins
+npm run restart         # Restart StreamDock app (macOS)
+npm run link            # Link all plugins (macOS)
+npm run link:mactools   # Link mactools only (macOS)
+npm run link:unifi      # Link unifi only (macOS)
+npm run link:spruthub   # Link spruthub only (macOS)
+npm run link:acontrol   # Link acontrol only (macOS)
+npm run link:antelope   # Link antelope only (macOS)
+npm run unlink          # Remove symlinks (macOS)
+npm run link:win        # Link all plugins (Windows/WSL, requires admin)
+npm run link:win:{name} # Link specific plugin (Windows/WSL, e.g. link:win:wintools)
 ```
 
 ### Completion Checklist
@@ -145,9 +151,7 @@ npm run unlink        # Remove symlinks (macOS)
 Run these after finishing any work:
 
 ```bash
-# Install deps in all plugin directories
-for d in com.isrudoy.*.sdPlugin; do (cd "$d" && npm install); done
-
+npm run install:all   # Install deps in all plugin directories
 npm run fmt           # Fix formatting
 npm run lint          # Lint check (must pass)
 npm run typecheck     # Type check (must pass)
@@ -511,7 +515,7 @@ plugin/
 │   ├── common.js         # Constants, colors, logging
 │   ├── state.js          # Shared state (contexts, timers, dial debounce)
 │   ├── websocket.js      # setImage, setTitle, sendToPropertyInspector
-│   ├── spruthub.js       # SprutHubClient: WebSocket API, service/char helpers
+│   ├── spruthub.js       # SprutHub: WebSocket API, service/char helpers
 │   ├── base-action.js    # BaseAction class, shared handlers (see below)
 │   └── draw-common.js    # Canvas helpers, layout constants
 └── actions/
@@ -543,7 +547,7 @@ All actions extend `BaseAction` class which provides:
 ```javascript
 const {
   BaseAction,
-  SprutHubClient,
+  SprutHub,
   mapBaseSettings,        // Maps common settings from PI payload
   handleToggleKeyUp,      // Standard on/off/toggle handler
   handleOnOffStateChange, // Standard state change for on/off devices
@@ -559,7 +563,7 @@ const switchAction = new BaseAction({
   drawIcon: (ctx, x, y, size, color) => drawSwitchIcon(ctx, x, y, size, color, false),
   initialState: { on: false },
   useRoomName: false,       // Show accessory/service name (default). Set true for lights.
-  findService: (accessory) => SprutHubClient.findSwitchService(accessory),
+  findService: (accessory) => SprutHub.findSwitchService(accessory),
   extractState: extractOnOffState,
   renderState,              // Keypad rendering (144x144)
   renderKnobState,          // Knob rendering (230x144) - optional
@@ -683,7 +687,7 @@ WebSocket JSON-RPC protocol over `wss://{host}/bff/`.
 
 **Offline detection:**
 - API returns `online: true/false` on accessory objects
-- Check via `SprutHubClient.isAccessoryOffline(accessory)`
+- Check via `SprutHub.isAccessoryOffline(accessory)`
 
 ### Button States
 
@@ -1001,7 +1005,7 @@ npm install --os=darwin --cpu=arm64  # add macOS ARM binary
 2. **PI Not Receiving Data** — Check `currentPIContext` is set
 3. **setImage not working** — Use PNG, not SVG
 4. **Razer not detected** — Requires Input Monitoring permission
-5. **DEBUG left enabled** — Set `DEBUG = true` in `plugin/lib/common.js` for debugging (logs to `plugin/plugin.log`), but ensure it's `false` before finishing work
+5. **DEBUG logging** — `DEBUG = true` in source so logs always work locally. Release workflow auto-sets `DEBUG = false` before packaging ZIPs. Never change this manually.
 6. **Knob shows Keypad layout** — Implement `renderKnobState` callback for actions that support Knob; if not provided, BaseAction falls back to Keypad rendering
 7. **didReceiveSettings sends stale data** — StreamDock may send `didReceiveSettings` with outdated data after PI updates settings; BaseAction ignores this if context already has `accessoryId`
 8. **Characteristic ID vs Type** — `CHAR_ON` (37), `CHAR_BRIGHTNESS` (38) etc. are TYPE constants, not actual IDs. Always use `settings.characteristicId` from PI, not type constants for matching in `handleStateChange`

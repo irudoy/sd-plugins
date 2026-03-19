@@ -11,7 +11,7 @@ const path = require('path');
 // ============================================================
 
 /** @type {boolean} */
-const DEBUG = !process.env.CI;
+const DEBUG = true;
 
 // Action UUID
 /** @type {string} */

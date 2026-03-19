@@ -145,6 +145,12 @@ jobs:
           # Remove package-lock.json
           rm -f package-lock.json
 
+      - name: Disable DEBUG for release
+        run: |
+          PLUGIN_DIR="com.isrudoy.${{ matrix.plugin }}.sdPlugin"
+          find "$PLUGIN_DIR/plugin" -name "common.js" -exec \
+            sed -i 's/const DEBUG = true;/const DEBUG = false;/' {} +
+
       - name: Create ZIP archive
         run: |
           PLUGIN_DIR="com.isrudoy.${{ matrix.plugin }}.sdPlugin"
