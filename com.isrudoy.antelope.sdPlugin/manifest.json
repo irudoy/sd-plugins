@@ -42,7 +42,7 @@
   "Description": "Control Antelope Audio Zen Quadro SC",
   "Category": "Antelope Control",
   "CategoryIcon": "static/img/categoryIcon",
-  "Version": "1.2.0",
+  "Version": "1.2.1",
   "OS": [
     {
       "Platform": "mac",
