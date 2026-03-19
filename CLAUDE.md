@@ -11,6 +11,7 @@ Monorepo for StreamDock plugins. Cross-platform: macOS + Windows.
 | wintools | `com.isrudoy.wintools` | Battery Monitor (Razer devices) | Windows only |
 | spruthub | `com.isrudoy.spruthub` | Sprut.Hub smart home control (9 actions) | macOS + Windows |
 | acontrol | `com.isrudoy.acontrol` | Adam Audio A-Series speaker control | macOS + Windows |
+| antelope | `com.isrudoy.antelope` | Antelope Zen Quadro SC audio interface control | macOS + Windows |
 
 **Architecture:** Node.js backend + HTML/JS Property Inspector
 **SDK:** StreamDock SDK (NOT Elgato Stream Deck SDK)
@@ -70,15 +71,32 @@ sd-plugins/
 │   ├── button/
 │   ├── scenario/
 │   └── static/               # SDK (not linted)
-└── com.isrudoy.acontrol.sdPlugin/
+├── com.isrudoy.acontrol.sdPlugin/
+│   ├── package.json
+│   ├── package-lock.json
+│   ├── manifest.json
+│   ├── plugin/               # Node.js backend
+│   │   ├── index.js          # Entry point, event routing
+│   │   ├── lib/              # Shared modules (OCA protocol, speaker manager)
+│   │   └── actions/          # speakers.js (single universal action)
+│   ├── speakers/             # Property Inspector
+│   ├── pi-lib/               # Shared PI code
+│   └── static/               # SDK (not linted)
+└── com.isrudoy.antelope.sdPlugin/
     ├── package.json
     ├── package-lock.json
     ├── manifest.json
+    ├── antelope/             # Protocol library (shared with CLI)
+    │   ├── antelope.js       # AntelopeClient class
+    │   ├── protocol.js       # Wire protocol encode/decode
+    │   ├── constants.js      # Device constants
+    │   └── cli.js            # CLI tool for testing
     ├── plugin/               # Node.js backend
     │   ├── index.js          # Entry point, event routing
-    │   ├── lib/              # Shared modules (OCA protocol, speaker manager)
-    │   └── actions/          # speakers.js (single universal action)
-    ├── speakers/             # Property Inspector
+    │   ├── lib/              # Shared modules (antelope-manager, draw-common)
+    │   └── actions/          # output.js, mixer.js
+    ├── output/               # Property Inspector (output action)
+    ├── mixer/                # Property Inspector (mixer action)
     ├── pi-lib/               # Shared PI code
     └── static/               # SDK (not linted)
 ```
@@ -91,6 +109,7 @@ npm install           # Install dev dependencies in root
 cd com.isrudoy.mactools.sdPlugin && npm install && cd ..
 cd com.isrudoy.unifi.sdPlugin && npm install && cd ..
 cd com.isrudoy.spruthub.sdPlugin && npm install && cd ..
+cd com.isrudoy.antelope.sdPlugin && npm install && cd ..
 npm run link          # Symlink all plugins to StreamDock
 ```
 
@@ -185,6 +204,7 @@ git push origin master
 | unifi | darwin-arm64 + win32-x64 |
 | spruthub | darwin-arm64 + win32-x64 |
 | acontrol | darwin-arm64 + win32-x64 |
+| antelope | darwin-arm64 + win32-x64 |
 
 ZIP includes `node_modules/` with platform-specific `@napi-rs/canvas` binaries.
 
@@ -385,6 +405,84 @@ Action-specific icons on Keypad:
 - **Voicing** — Pure (straight lines), UNR (wavy lines), Ext. (lines with sliders)
 
 Knob always shows speaker icon (main function is volume control).
+
+## antelope (com.isrudoy.antelope)
+
+Antelope Zen Quadro SC audio interface control via Antelope Manager Server TCP protocol.
+
+### Architecture
+
+Unlike other plugins, antelope has a **shared protocol library** (`antelope/`) used by both the plugin backend and a standalone CLI tool for testing.
+
+```
+antelope/                   # Protocol library (not a plugin directory)
+├── antelope.js             # AntelopeClient: TCP connection, state management
+├── protocol.js             # Wire protocol: encode/decode JSON over TCP
+├── constants.js            # Device constants (outputs, buses, peripherals)
+└── cli.js                  # Interactive CLI for testing/debugging
+```
+
+### Connection
+
+Connects to Antelope Manager Server (Control Panel companion process) via TCP on localhost. Port autodiscovery scans 2020-2030 for the main protocol port (identified by cyclic reports containing `volumes`).
+
+- **Cyclic reports** (~500ms) — output volumes, preamp state, sync info
+- **get_mixer** responses — full mixer bus state (fader, pan, mute, solo)
+- **set_mixer notifications** — real-time single-channel updates
+- **get_mixer_links** — stereo link state for mixer channels
+
+### Actions
+
+| Action | UUID | Description |
+|--------|------|-------------|
+| Output | `com.isrudoy.antelope.output` | Output volume/mute/DIM (Keypad + Knob) |
+| Mixer | `com.isrudoy.antelope.mixer` | Mixer channel fader/mute/solo (Keypad + Knob) |
+
+### Optimistic Updates
+
+Two mechanisms prevent UI jitter from cyclic report latency:
+
+**Per-field output locks** — when user changes volume/mute/dim, the corresponding field is locked for 1s. Cyclic reports during this window use the optimistic value instead of the (potentially stale) reported value. Each field is locked independently so e.g. device auto-mute at -inf still comes through while volume is locked.
+
+**Mixer linked channel sync** — when channels are stereo-linked, optimistic updates apply to both channels simultaneously (state + command).
+
+### Stereo Link
+
+Mixer channels can be stereo-linked in pairs (odd+even: 1+2, 3+4, etc.). Link state comes from `get_mixer_links` (64 entries, mapped as 16 entries per bus). When linked:
+- Fader/mute/solo changes apply to both channels
+- Yellow "L" badge shown on Keypad, "LINK" text on Knob
+- `getLinkedPartner(busId, channel)` returns partner channel
+
+**Note:** Link entry mapping (16 per bus, entry p → channels 2p+1 and 2p+2) is a hypothesis — verify with CLI `links` command.
+
+### Module Structure
+
+```
+plugin/
+├── index.js                # Entry point, WebSocket, event routing
+├── lib/
+│   ├── common.js           # Constants, colors, logging, dB conversion
+│   ├── state.js            # Context management
+│   ├── websocket.js        # setImage, sendToPropertyInspector
+│   ├── antelope-manager.js # Singleton: connection, optimistic updates
+│   └── draw-common.js      # Canvas rendering (output arcs, mixer faders)
+└── actions/
+    ├── output.js           # Output action (volume arc, mute/dim)
+    └── mixer.js            # Mixer action (fader bar, mute/solo/link)
+```
+
+### CLI Tool
+
+```bash
+node com.isrudoy.antelope.sdPlugin/antelope/cli.js [port] [command]
+
+# Interactive mode
+antelope> status     # Output volumes, preamps, clock
+antelope> mixer      # Mixer state with link column
+antelope> links      # Raw + per-channel link state
+antelope> fader 7 10 # Set channel 7 fader
+antelope> link 7 on  # Stereo link channel 7
+```
 
 ## spruthub (com.isrudoy.spruthub)
 
