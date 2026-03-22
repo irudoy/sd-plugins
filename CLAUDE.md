@@ -4,1078 +4,264 @@
 
 Monorepo for StreamDock plugins. Cross-platform: macOS + Windows.
 
-| Plugin | ID | Description |
-|--------|-----|-------------|
-| mactools | `com.isrudoy.mactools` | Drive Info, Battery Monitor, Run Script | macOS only |
+| Plugin | ID | Description | Platform |
+|--------|-----|-------------|----------|
+| mactools | `com.isrudoy.mactools` | Drive Info, Battery Monitor, Run Script | macOS |
 | unifi | `com.isrudoy.unifi` | VPN Status - Unifi Network VPN client | macOS + Windows |
-| wintools | `com.isrudoy.wintools` | Battery Monitor (Razer devices) | Windows only |
+| wintools | `com.isrudoy.wintools` | Battery Monitor (Razer devices) | Windows |
 | spruthub | `com.isrudoy.spruthub` | Sprut.Hub smart home control (9 actions) | macOS + Windows |
 | acontrol | `com.isrudoy.acontrol` | Adam Audio A-Series speaker control | macOS + Windows |
-| antelope | `com.isrudoy.antelope` | Antelope Zen Quadro SC audio interface control | macOS + Windows |
+| antelope | `com.isrudoy.antelope` | Antelope Zen Quadro SC audio interface | macOS + Windows |
 
-**Architecture:** Node.js backend + HTML/JS Property Inspector
-**SDK:** StreamDock SDK (NOT Elgato Stream Deck SDK)
+**Architecture:** Node.js backend + HTML/JS Property Inspector (PI)
+**SDK:** StreamDock SDK (NOT Elgato Stream Deck SDK — different API, see below)
 
-## Monorepo Structure
+## Structure
 
 ```
 sd-plugins/
-├── package.json              # Root: dev dependencies, scripts
-├── eslint.config.mjs         # ESLint 9 flat config + Prettier
-├── tsconfig.json             # TypeScript for JSDoc type checking
-├── .prettierrc.json          # 2 spaces, single quotes, semicolons
-├── .editorconfig
-├── .github/workflows/        # CI/CD (ci.yml, release.yml)
-├── types/                    # TypeScript declarations
-│   ├── streamdock.d.ts       # Plugin backend types
-│   └── property-inspector.d.ts # PI globals ($settings, $websocket, etc.)
-├── com.isrudoy.mactools.sdPlugin/
-│   ├── package.json          # Runtime dependencies (ws, @napi-rs/canvas)
-│   ├── package-lock.json
-│   ├── manifest.json
-│   ├── plugin/               # Node.js backend
-│   ├── driveinfo/            # Property Inspector
-│   ├── battery/
-│   ├── osascript/
-│   └── static/               # SDK (not linted)
-├── com.isrudoy.wintools.sdPlugin/
-│   ├── package.json          # Runtime dependencies (ws, @napi-rs/canvas)
-│   ├── package-lock.json
-│   ├── manifest.json
-│   ├── Makefile              # Compile razer-battery-helper.exe
-│   ├── plugin/               # Node.js backend
-│   ├── battery/              # Property Inspector
-│   └── static/               # SDK (not linted)
-├── com.isrudoy.unifi.sdPlugin/
-│   ├── package.json
-│   ├── package-lock.json
-│   ├── manifest.json
-│   ├── plugin/
-│   ├── vpn/
-│   └── static/
-├── com.isrudoy.spruthub.sdPlugin/
-│   ├── package.json
-│   ├── package-lock.json
-│   ├── manifest.json
-│   ├── plugin/               # Node.js backend
-│   │   ├── index.js          # Entry point, event routing
-│   │   ├── lib/              # Shared modules
-│   │   └── actions/          # Device actions (9 types)
-│   ├── light/                # Property Inspectors (one per action)
-│   ├── switch/
-│   ├── outlet/
-│   ├── lock/
-│   ├── cover/
-│   ├── thermostat/
-│   ├── sensor/
-│   ├── button/
-│   ├── scenario/
-│   └── static/               # SDK (not linted)
-├── com.isrudoy.acontrol.sdPlugin/
-│   ├── package.json
-│   ├── package-lock.json
-│   ├── manifest.json
-│   ├── plugin/               # Node.js backend
-│   │   ├── index.js          # Entry point, event routing
-│   │   ├── lib/              # Shared modules (OCA protocol, speaker manager)
-│   │   └── actions/          # speakers.js (single universal action)
-│   ├── speakers/             # Property Inspector
-│   ├── pi-lib/               # Shared PI code
-│   └── static/               # SDK (not linted)
-└── com.isrudoy.antelope.sdPlugin/
-    ├── package.json
-    ├── package-lock.json
-    ├── manifest.json
-    ├── antelope/             # Protocol library (shared with CLI)
-    │   ├── antelope.js       # AntelopeClient class
-    │   ├── protocol.js       # Wire protocol encode/decode
-    │   ├── constants.js      # Device constants
-    │   └── cli.js            # CLI tool for testing
+├── package.json, eslint.config.mjs, tsconfig.json, .prettierrc.json
+├── types/                    # streamdock.d.ts, property-inspector.d.ts
+├── .github/workflows/        # ci.yml, release.yml
+└── com.isrudoy.{name}.sdPlugin/
+    ├── package.json, manifest.json
     ├── plugin/               # Node.js backend
-    │   ├── index.js          # Entry point, event routing
-    │   ├── lib/              # Shared modules (antelope-manager, draw-common)
-    │   └── actions/          # output.js, mixer.js
-    ├── output/               # Property Inspector (output action)
-    ├── mixer/                # Property Inspector (mixer action)
-    ├── pi-lib/               # Shared PI code
-    └── static/               # SDK (not linted)
+    │   ├── index.js          # Entry point, WebSocket, event routing
+    │   ├── lib/              # Shared modules (common, state, websocket, draw-common, ...)
+    │   └── actions/          # Action handlers
+    ├── {action}/index.html   # Property Inspector per action
+    ├── pi-lib/               # Shared PI code (spruthub, acontrol, antelope)
+    └── static/               # SDK files (not linted)
 ```
+
+Special: `antelope` has `antelope/` dir — shared protocol library for plugin + CLI tool.
 
 ## Development
 
 ### Setup (macOS)
 ```bash
-npm install           # Install dev dependencies in root
+npm install
 cd com.isrudoy.mactools.sdPlugin && npm install && cd ..
 cd com.isrudoy.unifi.sdPlugin && npm install && cd ..
 cd com.isrudoy.spruthub.sdPlugin && npm install && cd ..
 cd com.isrudoy.antelope.sdPlugin && npm install && cd ..
-npm run link          # Symlink all plugins to StreamDock
+npm run link
 ```
 
 ### Setup (Windows / WSL)
 
-**Environment:** WSL2 (Linux), StreamDock runs on Windows with built-in Node.js (v20.8.1).
-**Plugin directory:** `%APPDATA%\HotSpot\StreamDock\plugins\`
-**Linking:** `mklink /D` from Windows plugins dir to WSL path (`\\wsl$\...`). Requires admin.
+WSL2 → StreamDock runs on Windows with built-in Node.js (v20.8.1). Plugin dir: `%APPDATA%\HotSpot\StreamDock\plugins\`. Linking via `mklink /D` (admin).
 
 ```bash
-npm install                                          # Install dev dependencies in root
-cd com.isrudoy.wintools.sdPlugin && npm install && cd ..   # Install runtime deps
-cd com.isrudoy.wintools.sdPlugin && npm install --os=win32 --cpu=x64 && cd ..  # Add Windows binary
-cd com.isrudoy.wintools.sdPlugin && make && cd ..          # Compile Razer helper
-npm run link:win:wintools                            # Create Windows symlink (run as admin)
+npm install
+cd com.isrudoy.wintools.sdPlugin && npm install && npm install --os=win32 --cpu=x64 && make && cd ..
+npm run link:win:wintools
 ```
 
-### Scripts (from root)
+### Scripts
 ```bash
-npm run lint            # ESLint check
-npm run fmt             # ESLint + Prettier fix
-npm run typecheck       # TypeScript check (JSDoc)
-npm run install:all     # Install deps in all plugin directories
-npm run install:all:win # Install deps + Windows binaries for all plugins
-npm run restart         # Restart StreamDock app (macOS)
-npm run link            # Link all plugins (macOS)
-npm run link:mactools   # Link mactools only (macOS)
-npm run link:unifi      # Link unifi only (macOS)
-npm run link:spruthub   # Link spruthub only (macOS)
-npm run link:acontrol   # Link acontrol only (macOS)
-npm run link:antelope   # Link antelope only (macOS)
-npm run unlink          # Remove symlinks (macOS)
-npm run link:win        # Link all plugins (Windows/WSL, requires admin)
-npm run link:win:{name} # Link specific plugin (Windows/WSL, e.g. link:win:wintools)
+npm run lint / fmt / typecheck / install:all / install:all:win
+npm run restart          # Restart StreamDock (macOS)
+npm run link             # Link all (macOS); link:{name} for one
+npm run link:win         # Link all (Windows); link:win:{name} for one
 ```
 
 ### Completion Checklist
 
-Run these after finishing any work:
-
+Run after finishing any work:
 ```bash
-npm run install:all   # Install deps in all plugin directories
-npm run fmt           # Fix formatting
-npm run lint          # Lint check (must pass)
-npm run typecheck     # Type check (must pass)
+npm run install:all && npm run fmt && npm run lint && npm run typecheck
 ```
 
-### Testing
+### Testing & Debugging
 ```bash
-node --check com.isrudoy.mactools.sdPlugin/plugin/index.js  # Syntax check
-npm run restart                                              # Restart StreamDock
-cat com.isrudoy.mactools.sdPlugin/plugin/plugin.log         # Logs (if DEBUG=true)
+node --check com.isrudoy.{name}.sdPlugin/plugin/index.js  # Syntax check
+npm run restart                                             # Restart StreamDock
+cat com.isrudoy.{name}.sdPlugin/plugin/plugin.log          # Logs (if DEBUG=true)
 ```
-
-### Debugging
-Plugins can be inspected using Chrome DevTools:
-- Open `chrome://inspect` in Chrome/Chromium browser
-- Or navigate directly to `http://localhost:23519/`
-- Click "inspect" next to the plugin process to open DevTools
+Chrome DevTools: `chrome://inspect` or `http://localhost:23519/`
 
 ## CI/CD
-
-GitHub Actions workflows in `.github/workflows/`:
 
 | Workflow | Trigger | Description |
 |----------|---------|-------------|
 | `ci.yml` | PR to master, push to non-master | Lint + typecheck |
 | `release.yml` | Push to master | Build + release all plugins |
 
-### Versioning
+**Versioning:** Single version in root `package.json`. Auto patch bump on push to master if tag exists. Manual major/minor: change version in `package.json` before push.
 
-Single version in root `package.json`, synced to all plugins on release.
+**Artifacts:** ZIP per plugin with `node_modules/` + platform-specific `@napi-rs/canvas` binaries.
 
-- **Auto patch bump:** Push to master → if tag `v{version}` exists → increment patch
-- **Manual major/minor:** Change version in `package.json` before push → uses that version
+**macOS Quarantine:** `xattr -cr ~/Library/Application\ Support/HotSpot/StreamDock/plugins/com.isrudoy.*.sdPlugin`
 
-```bash
-# Patch release (automatic)
-git commit -m "fix: something"
-git push origin master
-# → v1.0.1 (auto-incremented from v1.0.0)
+## StreamDock vs Elgato SDK (critical differences)
 
-# Minor/major release (manual)
-# Edit package.json: "1.0.0" → "1.1.0"
-git commit -m "feat: new feature"
-git push origin master
-# → v1.1.0
-```
+| Aspect | StreamDock SDK |
+|--------|----------------|
+| PI Events | `$propEvent.sendToPropertyInspector(data)` (NOT `$SD.on(...)`) |
+| Send to Plugin | `$websocket.sendToPlugin(payload)` (NOT `$SD.api.sendToPlugin(...)`) |
+| Settings | `$settings` proxy — auto-saves (NOT `$SD.api.setSettings(...)`) |
+| Context/routing | `$uuid` (NOT `context` from actionInfo) |
 
-### Release Artifacts
+PI files define: `$local = false`, `$back = false`, `$propEvent` object with `didReceiveSettings` and `sendToPropertyInspector` handlers.
 
-| Plugin | Platforms in ZIP |
-|--------|------------------|
-| mactools | darwin-arm64 |
-| wintools | win32-x64 |
-| unifi | darwin-arm64 + win32-x64 |
-| spruthub | darwin-arm64 + win32-x64 |
-| acontrol | darwin-arm64 + win32-x64 |
-| antelope | darwin-arm64 + win32-x64 |
+SDK files in `static/`: `common.js` (jQuery-like $, $.debounce, $emit), `sd-action.js`, `css/sdpi.css`.
 
-ZIP includes `node_modules/` with platform-specific `@napi-rs/canvas` binaries.
+## Dynamic Images & Canvas
 
-### macOS Quarantine
+**SVG does not work!** StreamDock doesn't support SVG. Use `@napi-rs/canvas` + PNG.
 
-Downloaded ZIPs are quarantined by macOS. After installing:
-```bash
-xattr -cr ~/Library/Application\ Support/HotSpot/StreamDock/plugins/com.isrudoy.*.sdPlugin
-```
+`@napi-rs/canvas` (Skia) — prebuilt binaries per platform, no compilation, drop-in replacement for node-canvas. Cross-platform install from WSL: `npm install --os=win32 --cpu=x64`.
 
-### Repository Settings
+Two canvas sizes:
+- **Keypad** — 144×144 px (standard button)
+- **Knob** — 230×144 px (StreamDock+ touchscreen above encoder)
 
-Required for release workflow:
-- Settings → Actions → General → Workflow permissions: **Read and write permissions**
+**SVG icons via canvas:** Skia supports SVG natively via `loadImage(Buffer.from(svgString))` — can replace manual path drawing with parametric SVG strings.
 
-## mactools (com.isrudoy.mactools)
+## Type Definitions (types/)
 
-### Actions
+- **streamdock.d.ts** — plugin backend (WebSocket messages, settings, events)
+- **property-inspector.d.ts** — PI globals (`$settings`, `$websocket`, `$propEvent`)
+- Key Knob types: `AppearPayload.controller` → `'Keypad' | 'Knob'`, `ActionContext.controller`
 
-| Action | UUID | Description |
-|--------|------|-------------|
-| Drive Info | `com.isrudoy.mactools.driveinfo` | Disk space monitoring with progress bar |
-| Battery Monitor | `com.isrudoy.mactools.battery` | Apple Bluetooth & Razer device battery |
-| Run Script | `com.isrudoy.mactools.osascript` | AppleScript / JavaScript (JXA) |
-
-### Module Structure
-
-```
-plugin/
-├── index.js              # Entry point, WebSocket, event routing
-├── lib/
-│   ├── common.js         # Constants, colors, logging
-│   ├── state.js          # Shared state (contexts, timers, cache)
-│   ├── websocket.js      # setImage, setTitle, sendToPropertyInspector
-│   └── battery-drawing.js
-├── actions/
-│   ├── driveinfo.js
-│   ├── battery.js
-│   └── osascript.js
-└── devices/
-    ├── apple.js          # Apple Bluetooth battery
-    └── razer.js          # Razer HID battery (native helper)
-```
-
-## wintools (com.isrudoy.wintools)
-
-Windows-only Battery Monitor for Razer wireless devices via native HID helper.
-
-### Actions
-
-| Action | UUID | Description |
-|--------|------|-------------|
-| Battery Monitor | `com.isrudoy.wintools.battery` | Razer device battery with dual-device support |
-
-### Module Structure
-
-```
-plugin/
-├── index.js              # Entry point, WebSocket, event routing
-├── lib/
-│   ├── common.js         # Constants, colors, logging
-│   ├── state.js          # Shared state (contexts, timers, device cache)
-│   ├── websocket.js      # setImage, setTitle, sendToPropertyInspector
-│   └── battery-drawing.js # Canvas drawing (single + dual device modes)
-├── actions/
-│   └── battery.js        # Battery action (Razer only, no Apple)
-└── devices/
-    ├── razer.js           # JS wrapper (enumerate + query via .exe helper)
-    ├── razer-battery-helper.c   # C source (Windows HID API)
-    └── razer-battery-helper.exe # Compiled binary (cross-compiled from WSL)
-```
-
-### Native Helper (razer-battery-helper.exe)
-
-C program using Windows HID API. Cross-compiled from WSL with MinGW:
-```bash
-x86_64-w64-mingw32-gcc -O2 -o razer-battery-helper.exe razer-battery-helper.c -lsetupapi -lhid
-```
-
-**CLI interface (same as macOS helper):**
-```
---enumerate  → {"devices": [{"name": "Viper V3 Pro", "pid": 193, "path": "\\?\hid#...", "isWired": false}]}
---path "..." → {"battery": 85, "charging": false} | {"sleeping": true} | {"error": "..."}
-```
-
-**Key implementation details:**
-- Windows mouse driver (mouhid.sys) blocks `GENERIC_READ|GENERIC_WRITE` on mi_00
-- Solution: `CreateFile` with `dwDesiredAccess=0` + `IOCTL_HID_SET/GET_FEATURE` (FILE_ANY_ACCESS)
-- Target interface: `mi_00` with `FeatureReportByteLength >= 91`
-- 91-byte buffers (report ID 0x00 prepended, all offsets +1 vs macOS)
-- CRC: XOR over bytes [3..88] (transaction ID excluded)
-
-### Features (vs mactools battery)
-
-- **Dual device mode** — two devices on one button (split-view 144×144)
-- **Per-device intervals** — configurable 1–300 sec per device
-- **24-hour device cache** — shows offline devices with last-known battery %
-- **Lightning bolt as canvas path** — emoji `\u26A1` doesn't render on Windows sans-serif
-
-## unifi (com.isrudoy.unifi)
-
-VPN Status action for Unifi Network VPN clients.
-
-**Features:**
-- Connects to Unifi controller via API
-- Shows VPN name, IP, uptime, traffic (↓/↑)
-- States: Connected (green), Connecting (yellow), Disconnected (gray), Error (red)
-- Click opens VPN settings in browser
-
-**API Endpoints:**
-```
-GET /proxy/network/api/s/default/rest/networkconf     # VPN list
-GET /proxy/network/v2/api/site/default/vpn/connections # VPN status
-Headers: X-API-KEY: <key>, Accept: application/json
-```
-
-## acontrol (com.isrudoy.acontrol)
-
-Adam Audio A-Series speaker control via OCA/AES70 protocol over UDP.
-
-### Features
-
-- Auto-discovery via mDNS (`_oca._udp.local.`)
-- Broadcast control — all speakers receive commands simultaneously
-- Supports both Keypad and Knob controllers
-
-### Actions
-
-| Action | UUID | Description |
-|--------|------|-------------|
-| Speakers | `com.isrudoy.acontrol.speakers` | Universal speaker control (Keypad + Knob) |
-
-### Press Actions (configurable)
-
-| Action | Description |
-|--------|-------------|
-| Mute | Toggle mute/unmute |
-| DIM | Reduce volume by configurable amount (-10/-20/-30 dB) |
-| Sleep | Toggle sleep/wake |
-| Input | Cycle RCA ↔ XLR or set specific input |
-| Voicing | Set Pure/UNR/Ext. mode |
-
-### Dial Action (Knob only)
-
-- Volume control with configurable step (0.5/1.0/2.0 dB per tick)
-- Optimistic UI updates (immediate visual feedback, debounced API call)
-
-### Voicing Modes & Volume Control
-
-| Voicing | Mode | Volume Control |
-|---------|------|----------------|
-| Pure (0) | Backplate | Physical knob on speaker |
-| UNR (1) | Backplate | Physical knob on speaker |
-| Ext. (2) | Advanced/SoundID | OCA protocol (this plugin) |
-
-**Important:** Volume and DIM only work in Ext. voicing mode. In Pure/UNR modes, UI shows "Vol. N/A" or "N/A (Backplate)".
-
-### Module Structure
-
-```
-plugin/
-├── index.js              # Entry point, WebSocket, event routing
-├── lib/
-│   ├── common.js         # Constants, colors, logging
-│   ├── state.js          # Contexts, dial debounce
-│   ├── websocket.js      # setImage, sendToPropertyInspector
-│   ├── oca-protocol.js   # OCA/AES70 binary protocol encoding/decoding
-│   ├── adam-audio.js     # AdamAudioClient: UDP connection, commands
-│   ├── mdns-discovery.js # mDNS speaker discovery
-│   ├── speaker-manager.js # SpeakerManager: broadcast, state sync
-│   └── draw-common.js    # Canvas drawing, icons
-└── actions/
-    └── speakers.js       # Single universal action
-```
-
-### OCA Protocol
-
-Binary protocol over UDP port 49494:
-- 10-byte header: Sync (0x3B) + Version + Size + PDU Type + Count
-- Types: Command (0x01), Response (0x03), Keepalive (0x04)
-- Keepalive every ~1 second to maintain connection
-
-### Speaker Manager
-
-Singleton that manages all discovered speakers:
-- `addRef()` / `removeRef()` — reference counting (stays connected while plugin runs)
-- `broadcast(method, ...args)` — send command to all speakers
-- `getState()` — cached state (read from any speaker, they're physically synced)
-- All toggle/cycle methods use explicit set values to avoid sync issues
-
-### Icons
-
-Action-specific icons on Keypad:
-- **Mute** — speaker with sound waves (or X when muted)
-- **DIM** — speaker with faded waves
-- **Sleep** — moon
-- **Input** — RCA (single plug) or XLR (3-pin connector)
-- **Voicing** — Pure (straight lines), UNR (wavy lines), Ext. (lines with sliders)
-
-Knob always shows speaker icon (main function is volume control).
-
-## antelope (com.isrudoy.antelope)
-
-Antelope Zen Quadro SC audio interface control via Antelope Manager Server TCP protocol.
-
-### Architecture
-
-Unlike other plugins, antelope has a **shared protocol library** (`antelope/`) used by both the plugin backend and a standalone CLI tool for testing.
-
-```
-antelope/                   # Protocol library (not a plugin directory)
-├── antelope.js             # AntelopeClient: TCP connection, state management
-├── protocol.js             # Wire protocol: encode/decode JSON over TCP
-├── constants.js            # Device constants (outputs, buses, peripherals)
-└── cli.js                  # Interactive CLI for testing/debugging
-```
-
-### Connection
-
-Connects to Antelope Manager Server (Control Panel companion process) via TCP on localhost. Port autodiscovery scans 2020-2030 for the main protocol port (identified by cyclic reports containing `volumes`).
-
-- **Cyclic reports** (~500ms) — output volumes, preamp state, sync info
-- **get_mixer** responses — full mixer bus state (fader, pan, mute, solo)
-- **set_mixer notifications** — real-time single-channel updates
-- **get_mixer_links** — stereo link state for mixer channels
-
-### Actions
-
-| Action | UUID | Description |
-|--------|------|-------------|
-| Output | `com.isrudoy.antelope.output` | Output volume/mute/DIM (Keypad + Knob) |
-| Mixer | `com.isrudoy.antelope.mixer` | Mixer channel fader/mute/solo (Keypad + Knob) |
-
-### Optimistic Updates
-
-Two mechanisms prevent UI jitter from cyclic report latency:
-
-**Per-field output locks** — when user changes volume/mute/dim, the corresponding field is locked for 1s. Cyclic reports during this window use the optimistic value instead of the (potentially stale) reported value. Each field is locked independently so e.g. device auto-mute at -inf still comes through while volume is locked.
-
-**Mixer linked channel sync** — when channels are stereo-linked, optimistic updates apply to both channels simultaneously (state + command).
-
-### Stereo Link
-
-Mixer channels can be stereo-linked in pairs (odd+even: 1+2, 3+4, etc.). Link state comes from `get_mixer_links` (64 entries, mapped as 16 entries per bus). When linked:
-- Fader/mute/solo changes apply to both channels
-- Yellow "L" badge shown on Keypad, "LINK" text on Knob
-- `getLinkedPartner(busId, channel)` returns partner channel
-
-**Note:** Link entry mapping (16 per bus, entry p → channels 2p+1 and 2p+2) is a hypothesis — verify with CLI `links` command.
-
-### Module Structure
-
-```
-plugin/
-├── index.js                # Entry point, WebSocket, event routing
-├── lib/
-│   ├── common.js           # Constants, colors, logging, dB conversion
-│   ├── state.js            # Context management
-│   ├── websocket.js        # setImage, sendToPropertyInspector
-│   ├── antelope-manager.js # Singleton: connection, optimistic updates
-│   └── draw-common.js      # Canvas rendering (output arcs, mixer faders)
-└── actions/
-    ├── output.js           # Output action (volume arc, mute/dim)
-    └── mixer.js            # Mixer action (fader bar, mute/solo/link)
-```
-
-### CLI Tool
-
-```bash
-node com.isrudoy.antelope.sdPlugin/antelope/cli.js [port] [command]
-
-# Interactive mode
-antelope> status     # Output volumes, preamps, clock
-antelope> mixer      # Mixer state with link column
-antelope> links      # Raw + per-channel link state
-antelope> fader 7 10 # Set channel 7 fader
-antelope> link 7 on  # Stereo link channel 7
-```
-
-## spruthub (com.isrudoy.spruthub)
-
-Smart home control via Sprut.Hub controller (HomeKit-compatible).
-
-### Actions
-
-| Action | UUID | Description |
-|--------|------|-------------|
-| Light | `com.isrudoy.spruthub.light` | Lightbulb control with brightness, dial rotation |
-| Switch | `com.isrudoy.spruthub.switch` | Simple on/off switch |
-| Outlet | `com.isrudoy.spruthub.outlet` | Power outlet on/off |
-| Lock | `com.isrudoy.spruthub.lock` | Door lock control |
-| Cover | `com.isrudoy.spruthub.cover` | Window covering (blinds/shades) 0-100%, dial rotation |
-| Thermostat | `com.isrudoy.spruthub.thermostat` | Climate control with temperature, dial rotation |
-| Sensor | `com.isrudoy.spruthub.sensor` | Read-only sensors (temp, humidity, motion, contact) |
-| Button | `com.isrudoy.spruthub.button` | Trigger button events (single/double/long press), dial actions for Knob |
-| Scenario | `com.isrudoy.spruthub.scenario` | Run Sprut.Hub automation scenarios |
-
-### Module Structure
-
-```
-plugin/
-├── index.js              # Entry point, WebSocket, event routing
-├── lib/
-│   ├── common.js         # Constants, colors, logging
-│   ├── state.js          # Shared state (contexts, timers, dial debounce)
-│   ├── websocket.js      # setImage, setTitle, sendToPropertyInspector
-│   ├── spruthub.js       # SprutHub: WebSocket API, service/char helpers
-│   ├── base-action.js    # BaseAction class, shared handlers (see below)
-│   └── draw-common.js    # Canvas helpers, layout constants
-└── actions/
-    ├── light.js          # Lightbulb (on/off, brightness, dial)
-    ├── switch.js         # Switch (on/off)
-    ├── outlet.js         # Outlet (on/off)
-    ├── lock.js           # Lock (locked/unlocked)
-    ├── cover.js          # Cover (position 0-100%, dial)
-    ├── thermostat.js     # Thermostat (temp, mode, dial)
-    ├── sensor.js         # Sensors (temp, humidity, motion, contact)
-    ├── button.js         # Button (single/double/long press, Knob dial actions)
-    └── scenario.js       # Scenario (run automation)
-
-pi-lib/                   # Shared Property Inspector code
-├── common.js             # SprutHubPI: initConnection, initDeviceSelection
-└── styles.css            # Common PI styles (status messages, connection panel)
-
-{device}/index.html       # PI for each action type (light, switch, scenario, etc.)
-```
-
-### BaseAction Pattern (base-action.js)
-
-All actions extend `BaseAction` class which provides:
-- Event handlers: `onWillAppear`, `onWillDisappear`, `onKeyUp`, `onDialRotate`, etc.
-- State management: `fetchState`, `updateButton`, `syncAccessoryState`
-- PI communication: `handleTestConnection`, `handleGetDevices`
-
-**Shared utility functions:**
-```javascript
-const {
-  BaseAction,
-  SprutHub,
-  mapBaseSettings,        // Maps common settings from PI payload
-  handleToggleKeyUp,      // Standard on/off/toggle handler
-  handleOnOffStateChange, // Standard state change for on/off devices
-  extractOnOffState,      // Extract on/off state from service
-} = require('../lib/base-action');
-```
-
-**Action configuration example (switch.js):**
-```javascript
-const switchAction = new BaseAction({
-  actionType: SWITCH_ACTION,
-  deviceTypeName: 'Switch',
-  drawIcon: (ctx, x, y, size, color) => drawSwitchIcon(ctx, x, y, size, color, false),
-  initialState: { on: false },
-  useRoomName: false,       // Show accessory/service name (default). Set true for lights.
-  findService: (accessory) => SprutHub.findSwitchService(accessory),
-  extractState: extractOnOffState,
-  renderState,              // Keypad rendering (144x144)
-  renderKnobState,          // Knob rendering (230x144) - optional
-  handleStateChange: handleOnOffStateChange,
-  handleKeyUp: handleToggleKeyUp,
-});
-
-module.exports = switchAction.getExports();
-```
-
-**Display name logic (`getDisplayName`):**
-- `customName` (if set by user)
-- `roomName` (only if `useRoomName: true` in config, e.g., for lights)
-- `serviceName` (if different from accessoryName, e.g., multi-switch devices)
-- `accessoryName` (default fallback)
-
-### Knob Support (StreamDock+)
-
-StreamDock+ devices have two controller types with different canvas sizes:
-- **Keypad** — standard square button (144×144 px)
-- **Knob** — wide touchscreen above encoder dial (230×144 px)
-
-The `willAppear` event payload contains `controller: 'Keypad' | 'Knob'` to detect the type.
-
-**Dial rotation callbacks:**
-- `previewDialRotate` — immediate UI update (no API call)
-- `handleDialRotate` — debounced API call (150ms)
-
-State is synced across all buttons for the same accessory via `syncAccessoryState()`.
-
-**State caching (page switch):**
-- `cacheState(actionType, accessoryId, state)` — cache state when fetched or changed
-- `getCachedState(actionType, accessoryId)` — restore cached state on `willAppear`
-- Prevents "Connecting..." flash when switching StreamDock pages
-- Key format: `${actionType}:${accessoryId}` to avoid collisions between device types
-
-### Action-Specific Display
-
-**Button action (Keypad 144×144):**
-- Line 1: `serviceName` — the button/action name (e.g., "Включить")
-- Line 2: `accessoryName` — the device name (e.g., "Колонки")
-
-**Button action (Knob 230×144):**
-- Name: `accessoryName` — device name
-- Status: dial action names (e.g., "Тише / Включить / Громче") or custom `customStatus`
-- Names from `dialLeftServiceName`, `dialPressServiceName`, `dialRightServiceName`
-
-**Thermostat action (both modes):**
-- Large: current temperature
-- Status: target temp with arrow + mode (e.g., "↑ 25.0° · Heat")
-
-**Adding Knob rendering to an action:**
-
-1. Implement `renderKnobState(ctx, state, settings)` function that draws on 230×144 canvas
-2. Pass it to BaseAction config: `renderKnobState: renderKnobState`
-3. BaseAction automatically chooses between Keypad/Knob rendering based on controller type
-
-```javascript
-// Example renderKnobState for light action (light.js)
-function renderKnobState(settings, state, _name) {
-  const { canvas, ctx } = createKnobCanvas();
-  const iconColor = state.on ? COLORS.warmYellow : COLORS.gray;
-  const textColor = state.on ? COLORS.white : COLORS.gray;
-
-  // Draw icon on left side
-  drawLightbulb(ctx, KNOB_LAYOUT.iconX, KNOB_LAYOUT.iconY, KNOB_LAYOUT.iconSize, iconColor);
-
-  // Calculate vertical centering (see "Knob text layout" section)
-  ctx.textAlign = 'left';
-  const maxChars = 11;
-  // ... word-wrap device name into line1/line2 ...
-  // ... calculate startY for vertical centering ...
-
-  // Room name (gray, small)
-  ctx.fillStyle = COLORS.gray;
-  ctx.font = 'bold 14px sans-serif';
-  ctx.fillText(roomName, KNOB_LAYOUT.nameX, startY);
-
-  // Device name (white, larger, 1-2 lines)
-  ctx.fillStyle = textColor;
-  ctx.font = 'bold 20px sans-serif';
-  ctx.fillText(line1, KNOB_LAYOUT.nameX, name1Y);
-
-  // Status (colored)
-  ctx.fillStyle = iconColor;
-  ctx.font = 'bold 20px sans-serif';
-  ctx.fillText(state.on ? state.brightness + '%' : 'Off', KNOB_LAYOUT.statusX, statusY);
-
-  return canvas.toDataURL('image/png');
-}
-```
-
-### Sprut.Hub API
-
-WebSocket JSON-RPC protocol over `wss://{host}/bff/`.
-
-**Authentication:**
-```javascript
-{ jsonrpc: '2.0', method: 'auth', params: { token, serial }, id }
-```
-
-**Key methods:**
-- `getAccessories` — list all accessories with services and characteristics
-- `getRooms` — list rooms for device grouping
-- `updateCharacteristic` — change device state
-
-**Service types (from API):**
-- `Lightbulb` / 13 — lights
-- `Switch` — switches
-- `Outlet` — outlets
-- `LockMechanism` — locks
-- `WindowCovering` — blinds/shades
-- `Thermostat` — climate control
-- `TemperatureSensor`, `HumiditySensor`, `ContactSensor`, `MotionSensor` — sensors
-- `StatelessProgrammableSwitch` / 89 — buttons (doorbell, Aqara buttons)
-
-**Characteristic values:**
-- `boolValue` — on/off states
-- `intValue` — modes, positions (0-100)
-- `doubleValue` — temperature, humidity
-
-**Offline detection:**
-- API returns `online: true/false` on accessory objects
-- Check via `SprutHub.isAccessoryOffline(accessory)`
-
-### Button States
-
-All actions support these visual states:
-- **Normal** — device state with icon, name, status bar
-- **Connecting** — yellow, "Connecting..." text
-- **Error** — red background, error message
-- **Not Configured** — gray, "Setup" / "Open settings"
-- **Offline** — gray icon/text, "Offline" status
-
-### Canvas Drawing
-
-Uses `@napi-rs/canvas` (Skia backend) for dynamic button images. Two canvas sizes:
-- **Keypad**: 144×144 px (square button)
-- **Knob**: 230×144 px (wide touchscreen)
-
-**draw-common.js** — shared drawing utilities:
-```javascript
-const {
-  // Keypad (144x144)
-  createButtonCanvas,    // Returns { canvas, ctx } for 144x144 canvas
-  drawStatusBar,         // Bottom status bar
-  drawDeviceName,        // Device name text
-  drawStatusText,        // Status text (On/Off, percentage, etc.)
-  drawError,             // Error state
-  drawConnectingWithIcon,
-  drawNotConfiguredWithIcon,
-  drawOfflineWithIcon,
-
-  // Knob (230x144)
-  createKnobCanvas,      // Returns { canvas, ctx } for 230x144 canvas
-  drawKnobError,
-  drawKnobConnectingWithIcon,
-  drawKnobNotConfiguredWithIcon,
-  drawKnobOfflineWithIcon,
-
-  // Constants
-  CANVAS_SIZE,           // 144
-  CANVAS_CENTER,         // 72
-  LAYOUT,                // Keypad layout constants
-} = require('../lib/draw-common');
-```
-
-**Keypad layout constants (common.js):**
-```javascript
-const LAYOUT = {
-  bulbY: 50,           // Icon vertical position
-  bulbSize: 70,        // Icon size
-  nameY: 104,          // Device name Y position
-  nameYOff: 109,       // Device name Y when off (no status text)
-  brightnessY: 125,    // Status text Y position
-  statusBarY: 138,     // Status bar Y position
-  statusBarHeight: 6,  // Status bar height
-};
-```
-
-**Knob layout constants (draw-common.js):**
-```javascript
-const KNOB_WIDTH = 230;
-const KNOB_HEIGHT = 144;
-const KNOB_LAYOUT = {
-  iconX: 50,           // Icon center X (left side)
-  iconY: 72,           // Icon center Y (vertical center)
-  iconSize: 70,        // Icon size
-  nameX: 95,           // Name/status X position (right side)
-  statusX: 95,         // Status text X (same as nameX)
-};
-```
-
-**Knob text layout (light/cover/button):**
-
-Text on right side is vertically centered relative to icon (Y=72):
-- Line 1: Room name (gray, 14px, bold)
-- Line 2-3: Device name (white, 20px, bold, wraps if > 11 chars)
-- Line 4: Status (colored, 20px, bold)
-
-```javascript
-// Vertical centering calculation in renderKnobState:
-const roomH = 14;
-const nameH = 20;
-const statusH = 20;
-const gapRoomName = 6;
-const gapNameStatus = 5;
-const totalHeight = roomH + gapRoomName + nameH + (line2 ? nameH : 0) + gapNameStatus + statusH;
-const startY = KNOB_LAYOUT.iconY - 2 - totalHeight / 2 + roomH;  // -2px offset for visual balance
-```
-
-**Note:** Knob layout has no status bar — the wide format uses horizontal layout with icon on left, text on right.
-
-## Critical Knowledge
-
-### Type Definitions (types/)
-
-Types for JSDoc annotations in JavaScript files:
-
-- **streamdock.d.ts** — types for plugin backend (WebSocket messages, settings, events)
-- **property-inspector.d.ts** — PI globals (`$settings`, `$websocket`, `$propEvent`, etc.)
-
-Used via `@type` in JSDoc:
+Used via JSDoc `@type`:
 ```javascript
 /** @type {StreamDockSettings} */
 const settings = data.settings || {};
 ```
 
-**Key types for Knob support:**
-- `AppearPayload.controller` — `'Keypad' | 'Knob'` (controller type from `willAppear`)
-- `ActionContext.controller` — stored controller type for rendering decisions
+## mactools
 
-### StreamDock vs Elgato SDK
+| Action | UUID |
+|--------|------|
+| Drive Info | `com.isrudoy.mactools.driveinfo` |
+| Battery Monitor | `com.isrudoy.mactools.battery` |
+| Run Script | `com.isrudoy.mactools.osascript` |
 
-| Aspect | Elgato SDK | StreamDock SDK |
-|--------|------------|----------------|
-| PI Events | `$SD.on('sendToPropertyInspector', ...)` | `$propEvent.sendToPropertyInspector(data)` |
-| Send to Plugin | `$SD.api.sendToPlugin(context, action, payload)` | `$websocket.sendToPlugin(payload)` |
-| Settings | `$SD.api.setSettings(context, settings)` | `$settings` proxy (auto-saves) |
-| Context | Uses `context` from actionInfo | Uses `$uuid` for routing |
+**Apple Bluetooth:** `ioreg` + `system_profiler SPBluetoothDataType`.
+**Razer (macOS):** native helper (`devices/razer-battery-helper`), requires Input Monitoring permission.
+**macOS APFS:** `df` shows wrong values for root — use `/System/Volumes/Data` partition and remap to `/`.
 
-### SDK Files (static/ — not linted)
+## wintools
 
-```
-static/
-  common.js      - jQuery-like utilities ($, $.debounce, $emit)
-  sd-action.js   - StreamDock SDK for Property Inspector
-  css/sdpi.css   - PI styles
-```
+Battery Monitor for Razer wireless devices. **Features vs mactools:** dual device mode (split-view 144×144), per-device intervals (1–300s), 24-hour device cache, lightning bolt drawn as canvas path (emoji ⚡ doesn't render on Windows sans-serif).
 
-### Property Inspector Pattern
+**Native helper** (`razer-battery-helper.exe`): C, cross-compiled from WSL with MinGW. CLI: `--enumerate`, `--path "..."`.
+**HID quirk:** Windows mouhid.sys blocks `GENERIC_READ|GENERIC_WRITE` on mi_00. Solution: `CreateFile` with `dwDesiredAccess=0` + `IOCTL_HID_SET/GET_FEATURE`. Target `mi_00` with `FeatureReportByteLength >= 91`. 91-byte buffers (report ID 0x00 prepended, all offsets +1 vs macOS). CRC: XOR over bytes [3..88].
 
-```javascript
-const $local = false;
-const $back = false;
+## unifi
 
-const $propEvent = {
-  didReceiveSettings(data) {
-    const settings = data.settings || {};
-    $websocket.sendToPlugin({ event: 'getData' });
-  },
-  sendToPropertyInspector(data) {
-    if (data.event === 'dataList') {
-      // Handle data
-    }
-  }
-};
-```
+VPN Status for Unifi Network. Shows name, IP, uptime, traffic. States: Connected (green), Connecting (yellow), Disconnected (gray), Error (red).
 
-### Spruthub PI Architecture (pi-lib/)
+**API:** `GET /proxy/network/api/s/default/rest/networkconf` (VPN list), `GET /proxy/network/v2/api/site/default/vpn/connections` (status). Headers: `X-API-KEY`, `Accept: application/json`.
 
-Shared code for all Property Inspectors with composable initialization:
+## acontrol
 
-**pi-lib/common.js** — `SprutHubPI` module:
+Adam Audio A-Series control via OCA/AES70 over UDP port 49494. Auto-discovery via mDNS (`_oca._udp.local.`).
 
-Two initialization functions:
-- `initConnection(options)` — connection settings only (for scenario PI)
-- `initDeviceSelection(config)` — full PI with device/service selection
+**Single action** `com.isrudoy.acontrol.speakers` — Keypad: Mute/DIM/Sleep/Input/Voicing. Knob: volume dial with configurable step.
 
-```javascript
-// Connection-only PI (scenario)
-const piInit = SprutHubPI.initConnection({
-  onSendToPropertyInspector: handleSendToPI,  // custom event handler
-});
-const $propEvent = piInit.$propEvent;
+**Important:** Volume/DIM only work in Ext. voicing mode (2). Pure (0) / UNR (1) use physical knob → UI shows "Vol. N/A".
 
-// Device selection PI (light, switch, etc.)
-const $propEvent = SprutHubPI.initDeviceSelection({
-  deviceSelectId: 'deviceSelect',
-  serviceLabel: 'Switch',
-  isServiceFn: isSwitchService,
-  findCharacteristicsFn: findCharacteristics,
-  defaultAction: 'toggle',
-  loadExtraSettings,      // optional
-  saveExtraSettings,      // optional
-  getExtraPluginSettings, // optional
-  onAccessorySelected,    // optional
-}).$propEvent;
-```
+**Speaker Manager:** Singleton, ref-counted (`addRef`/`removeRef`). `broadcast()` sends to all speakers. State cached (speakers are physically synced). Toggle/cycle use explicit set values to avoid sync issues.
 
-**Helper functions:**
-- `SprutHubPI.getConnectionSettings()` — returns `{host, token, serial}`
-- `SprutHubPI.testConnection()` — test connection button handler
-- `SprutHubPI.saveSettings()` — save and send settings to plugin
-- `SprutHubPI.findOnCharacteristic(service)` — find On characteristic
-- `SprutHubPI.findBrightnessCharacteristic(service)` — find Brightness characteristic
-- `SprutHubPI.getCharType(characteristic)` — get characteristic type
+**OCA protocol:** Binary, 10-byte header (Sync 0x3B + Version + Size + Type + Count). Types: Command (0x01), Response (0x03), Keepalive (0x04). Keepalive every ~1s.
 
-**Connection settings behavior:**
-- Auto-collapse on page load if already configured
-- Stay open after successful test (let user collapse manually)
-- Service dropdown always visible (even with single service) so user sees what's selected
+## antelope
 
-**Cascade selection reset:**
-- When room changes → device and service selectors reset
-- When device changes → service selector resets
-- All related settings (characteristicIds, serviceNames, etc.) are cleared
+Antelope Zen Quadro SC control via Antelope Manager Server TCP protocol.
 
-**Service names from dropdowns:**
-- Use `selectedOptions[0].textContent` to get name from dropdown
-- This works even if `availableButtons` array is empty during restore
+| Action | UUID |
+|--------|------|
+| Output | `com.isrudoy.antelope.output` |
+| Mixer | `com.isrudoy.antelope.mixer` |
 
-**pi-lib/styles.css** — common styles:
-- `.status-message`, `.status-success`, `.status-error`, `.status-info`
-- `.connection-btn`, `.connection-status`
-- `#connectionSettings` panel styling
+**Connection:** TCP localhost, port autodiscovery 2020-2030 (find port with cyclic reports containing `volumes`). Cyclic reports ~500ms (volumes, preamp, sync). Also: `get_mixer` (full bus state), `set_mixer` notifications, `get_mixer_links`.
 
-**PI HTML structure:**
-```html
-<link rel="stylesheet" href="../pi-lib/styles.css">
-<script src="../pi-lib/common.js"></script>
-...
-<div id="connectionSettingsContainer"></div>  <!-- Injected by init -->
-<div class="sdpi-item">
-  <div class="sdpi-item-label">Device</div>
-  <select id="deviceSelect">...</select>
-</div>
-```
+**Optimistic updates:** Per-field output locks (1s) — cyclic reports use optimistic value while locked. Each field independent (e.g. device auto-mute at -inf still comes through while volume is locked). Mixer linked channel sync applies updates to both channels.
 
-## Device Detection
+**Stereo link:** Pairs odd+even (1+2, 3+4). `get_mixer_links`: 64 entries, 16 per bus, entry p → channels 2p+1 and 2p+2 (hypothesis). Yellow "L" badge on Keypad, "LINK" on Knob.
 
-### Apple Bluetooth Battery
-```javascript
-// Uses ioreg + system_profiler
-exec('ioreg -r -k BatteryPercent | grep -E "..."');
-exec('system_profiler SPBluetoothDataType');
-```
+**CLI:** `node com.isrudoy.antelope.sdPlugin/antelope/cli.js [port] [command]` — status, mixer, links, fader, link.
 
-### Razer Battery (macOS)
-Uses native helper (`plugin/devices/razer-battery-helper`) for HID communication.
-**Requires:** Input Monitoring permission in System Preferences.
+## spruthub
 
-### Razer Battery (Windows)
-Uses native C helper (`plugin/devices/razer-battery-helper.exe`) for HID communication.
-Opens device with `dwDesiredAccess=0` to bypass mouhid.sys driver lock, uses `IOCTL_HID_SET/GET_FEATURE`.
+Smart home control via Sprut.Hub (HomeKit-compatible).
 
-## Dynamic Images
+| Action | UUID |
+|--------|------|
+| Light | `com.isrudoy.spruthub.light` |
+| Switch | `com.isrudoy.spruthub.switch` |
+| Outlet | `com.isrudoy.spruthub.outlet` |
+| Lock | `com.isrudoy.spruthub.lock` |
+| Cover | `com.isrudoy.spruthub.cover` |
+| Thermostat | `com.isrudoy.spruthub.thermostat` |
+| Sensor | `com.isrudoy.spruthub.sensor` |
+| Button | `com.isrudoy.spruthub.button` |
+| Scenario | `com.isrudoy.spruthub.scenario` |
 
-**SVG does not work!** StreamDock does not support SVG. Use `@napi-rs/canvas` + PNG:
+### BaseAction Pattern (base-action.js)
 
-```javascript
-const { createCanvas } = require('@napi-rs/canvas');
+All actions extend `BaseAction`. Config: `actionType`, `deviceTypeName`, `drawIcon`, `initialState`, `useRoomName`, `findService`, `extractState`, `renderState`, `renderKnobState` (optional), `handleStateChange`, `handleKeyUp`.
 
-function drawButton() {
-  const canvas = createCanvas(144, 144);
-  const ctx = canvas.getContext('2d');
-  // ... draw
-  return canvas.toDataURL('image/png');
-}
-```
+Shared utilities: `mapBaseSettings`, `handleToggleKeyUp`, `handleOnOffStateChange`, `extractOnOffState`.
 
-## macOS APFS Disk Space
+**Display name priority:** `customName` → `roomName` (only if `useRoomName: true`, e.g. lights) → `serviceName` (if differs from accessoryName) → `accessoryName`.
 
-`df` shows incorrect values for root. Use `/System/Volumes/Data`:
+### Knob Support
 
-```javascript
-const dataPartition = disks.find(d => d.mountpoint === '/System/Volumes/Data');
-if (dataPartition) {
-  rootDisk = { ...dataPartition, name: 'Macintosh HD', mountpoint: '/' };
-}
-```
+- `willAppear` payload has `controller: 'Keypad' | 'Knob'`
+- Dial: `previewDialRotate` (immediate UI) + `handleDialRotate` (debounced 150ms API call)
+- State synced across all buttons for same accessory via `syncAccessoryState()`
+- State cached per `${actionType}:${accessoryId}` — prevents "Connecting..." flash on page switch
+- Knob layout: icon left (x=50, y=72), text right (x=95), vertically centered. Room name (gray 14px) → device name (white 20px, wraps >11 chars) → status (colored 20px).
 
-## Dependencies
+### Action-Specific Display
 
-| Package | Purpose |
-|---------|---------|
-| ws | WebSocket for StreamDock communication |
-| @napi-rs/canvas | PNG image generation (Skia backend, prebuilt binaries) |
+**Button (Keypad):** Line 1 = `serviceName` (action name), Line 2 = `accessoryName` (device name).
+**Button (Knob):** Name = `accessoryName`. Status = dial action names (e.g. "Тише / Включить / Громче") or `customStatus`. Names from `dialLeftServiceName`, `dialPressServiceName`, `dialRightServiceName`.
+**Thermostat (both):** Large = current temp. Status = target temp with arrow + mode (e.g. "↑ 25.0° · Heat").
 
-### Canvas Library: @napi-rs/canvas
+### Sprut.Hub API
 
-Replaced `node-canvas` (Cairo) with `@napi-rs/canvas` (Skia) for cross-platform support.
+WebSocket JSON-RPC over `wss://{host}/bff/`. Auth: `{method: 'auth', params: {token, serial}}`.
+Methods: `getAccessories`, `getRooms`, `updateCharacteristic`.
 
-**Why not node-canvas:**
-- Requires native compilation (node-gyp + Cairo + Pango + GTK on Windows)
-- Known issues with prebuilt binaries on Node 20 + Windows
-- Cannot cross-install (WSL `npm install` produces Linux binaries unusable by Windows Node.js)
+**Service types:** Lightbulb (13), Switch, Outlet, LockMechanism, WindowCovering, Thermostat, *Sensor (4 types), StatelessProgrammableSwitch (89).
+**Char values:** `boolValue`, `intValue` (modes, 0-100), `doubleValue` (temp, humidity).
+**Offline:** `SprutHub.isAccessoryOffline(accessory)`.
 
-**Why @napi-rs/canvas:**
-- Ships prebuilt binaries per platform — no compilation, no system dependencies
-- Canvas 2D API is identical (`createCanvas`, `toDataURL`, `ctx.*` — drop-in replacement)
-- Only code change: `require('canvas')` → `require('@napi-rs/canvas')`
-- System fonts (`sans-serif`) load automatically via `GlobalFonts.loadSystemFonts()`
-- Used by discord.js, actively maintained
+### Spruthub PI (pi-lib/)
 
-**Platform binaries (optionalDependencies in package.json):**
+Two init modes: `SprutHubPI.initConnection()` (scenario only) and `SprutHubPI.initDeviceSelection({...})` (device actions with room/device/service dropdowns).
 
-| Package | Platform | Size |
-|---------|----------|------|
-| `@napi-rs/canvas-win32-x64-msvc` | Windows x64 | ~36 MB |
-| `@napi-rs/canvas-darwin-arm64` | macOS Apple Silicon | ~24 MB |
-| `@napi-rs/canvas-darwin-x64` | macOS Intel | ~29 MB |
+Connection panel auto-collapses if configured. Cascade reset: room → device/service, device → service. Service dropdown always visible. Service names: use `selectedOptions[0].textContent` (works even if `availableButtons` empty during restore).
 
-npm auto-installs the binary for the current platform. For cross-platform development (WSL → Windows), use `--os`/`--cpu` flags to add binaries for other platforms:
-```bash
-npm install --os=win32 --cpu=x64   # add Windows binary from WSL
-npm install --os=darwin --cpu=arm64  # add macOS ARM binary
-```
+### Button States
 
-**API differences from node-canvas (not used in our code, but worth knowing):**
-- Font registration: `registerFont()` → `GlobalFonts.registerFromPath()`
-- Image loading: `new Image(); img.src = buf` → `loadImage(pathOrBuffer)` (async)
+All actions: Normal, Connecting (yellow), Error (red), Not Configured (gray), Offline (gray + actual state).
 
 ## Coding Style
 
-### TypeScript/JSDoc Rules
-- **Never use `@ts-ignore`** — fix the type definitions instead
-- **Avoid type casts** where possible — use proper type definitions or restructure code
-- **Type casts are acceptable for**:
-  - WebSocket/API responses returning `unknown` (cast result to proper response typedef)
-  - Event handler data where the emitter uses `unknown` type
-- If API returns unknown structure, define proper types in JSDoc `@typedef`
-- Use optional chaining (`?.`) and nullish coalescing (`??`) for safe property access
-- Prefer runtime type guards (`typeof x === 'string'`) over casts when validating external input
+- **Never use `@ts-ignore`** — fix types instead
+- **Avoid type casts** — acceptable only for WebSocket/API `unknown` responses
+- Use `?.`, `??`, runtime type guards (`typeof x === 'string'`) over casts
+- Define proper `@typedef` for unknown API structures
 
 ## Common Pitfalls
 
 1. **Plugin Not Starting** — `node --check plugin/index.js`
 2. **PI Not Receiving Data** — Check `currentPIContext` is set
-3. **setImage not working** — Use PNG, not SVG
-4. **Razer not detected** — Requires Input Monitoring permission
-5. **DEBUG logging** — `DEBUG = true` in source so logs always work locally. Release workflow auto-sets `DEBUG = false` before packaging ZIPs. Never change this manually.
-6. **Knob shows Keypad layout** — Implement `renderKnobState` callback for actions that support Knob; if not provided, BaseAction falls back to Keypad rendering
-7. **didReceiveSettings sends stale data** — StreamDock may send `didReceiveSettings` with outdated data after PI updates settings; BaseAction ignores this if context already has `accessoryId`
-8. **Characteristic ID vs Type** — `CHAR_ON` (37), `CHAR_BRIGHTNESS` (38) etc. are TYPE constants, not actual IDs. Always use `settings.characteristicId` from PI, not type constants for matching in `handleStateChange`
-9. **Offline state rendering** — Don't use generic `drawOfflineWithIcon()` for all devices. Each action's `renderState` should handle `state.offline` and show actual state + "Offline" label (see switch.js)
-
-## Future Improvements
-
-### SVG icons via canvas
-`@napi-rs/canvas` (Skia) supports SVG natively via `loadImage(Buffer.from(svgString))`. Can replace manual canvas path drawing with parametric SVG strings (fill/stroke as template variables) and `drawImage()` for scaling. Applies to all plugins.
-
-### Corsair K83 Wireless battery support (wintools)
-
-**Status:** Research done, implementation blocked — iCUE itself doesn't show battery level for K83, protocol unconfirmed.
-
-**Known facts:**
-- VID: `0x1B1C`, PID: `0x1B42` (wired/dongle) or `0x1B6D` (variant) — need to confirm in Device Manager
-- K83 (2018) likely uses **NXP (CUE) protocol** (same as K63 Wireless), not Bragi
-- K83 is NOT supported by any open-source project (ckb-next, OpenCorsairLink, etc.)
-- Corsair dongle is a composite HID device with multiple interfaces (MI_00 keyboard, MI_01 consumer, MI_02+ vendor-specific)
-
-**NXP battery protocol (from ckb-next source):**
-```
-Send 64 bytes: {0x0E, 0x50, 0x00, ...}  — CMD_GET + FIELD_BATTERY
-Recv 64 bytes: [4]=level index (0-4), [5]=status (1=discharging, 2=charging, 3=charged)
-Battery LUT: index 0→0%, 1→15%, 2→30%, 3→50%, 4→100%
-```
-- Target the **last HID interface** (vendor-specific, usage page `0xFF00`+)
-- Communication: `HidD_SetFeature` / `HidD_GetFeature` or interrupt endpoints (firmware-dependent)
-
-**Alternative protocols (if NXP doesn't work):**
-- Bragi: send `{0x08, 0x02, 0x0F}`, response[3-5] = battery in tenths of percent
-- Headset: send `{0xC9, 0x64}`, read 5 bytes — unlikely for keyboard
-
-**Next step:** USB traffic capture with Wireshark + USBPcap while iCUE polls K83.
-
-**Sources:** [ckb-next](https://github.com/ckb-next/ckb-next) (NXP/Bragi protocol), [HeadsetControl](https://github.com/Sapd/HeadsetControl), [iCUE SDK](https://github.com/CorsairOfficial/cue-sdk)
-
-### 3Dconnexion SpaceMouse Wireless battery support (wintools)
-
-**Status:** Research done, protocol is standard HID — ready to implement. Connected via Bluetooth.
-
-**Device IDs (VID `0x256F`):**
-
-| PID | Device |
-|-----|--------|
-| `0xC62E` | SpaceMouse Wireless (USB cable) |
-| `0xC62F` | SpaceMouse Wireless Receiver (dongle) |
-| `0xC652` | Universal Receiver (multi-device dongle) |
-
-**Battery protocol — standard HID, not proprietary:**
-- **Report ID:** `0x17` — **Input report** (device sends passively, no polling needed)
-- **Usage Page:** `0x06` (Generic Device Controls), **Usage:** `0x20` (Battery Strength)
-- **Format:** 2 bytes — `[0x17, battery%]` where battery is 0-100%
-- Device sends battery report after user interaction stops (release cap/puck)
-- TLC: Usage Page `0x01`, Usage `0x08` (Multi-axis Controller)
-
-**Reading approaches:**
-1. `ReadFile` loop — filter for report ID `0x17` among motion/button reports
-2. `HidD_GetInputReport` — request cached report with `buffer[0] = 0x17`
-
-**Key advantages over Razer:**
-- No `SetFeature/GetFeature` — just read input reports
-- No proprietary protocol, CRC, or transaction IDs
-- `GENERIC_READ` sufficient — no driver conflict (mouhid.sys doesn't claim multi-axis controllers)
-
-**Open question:** Bluetooth connection — need to verify HID report descriptor is the same over BT as USB dongle.
-
-**Sources:** [spacenavd](https://github.com/FreeSpacenav/spacenavd) (VID/PID table), [3Dconnexion Forum](https://forum.3dconnexion.com/viewtopic.php?t=40919) (HID descriptor analysis), [hidapi#136](https://github.com/libusb/hidapi/issues/136) (Universal Receiver interfaces)
+3. **setImage not working** — PNG only, not SVG
+4. **Razer not detected** — Requires Input Monitoring permission (macOS)
+5. **DEBUG logging** — `DEBUG = true` in source for local dev. Release workflow auto-sets `false`. Never change manually.
+6. **Knob shows Keypad layout** — Must implement `renderKnobState` callback
+7. **didReceiveSettings stale data** — BaseAction ignores if context already has `accessoryId`
+8. **Characteristic ID vs Type** — `CHAR_ON` (37) etc. are TYPE constants, not IDs. Use `settings.characteristicId` for matching in `handleStateChange`.
+9. **Offline rendering** — Don't use generic `drawOfflineWithIcon()`. Each action's `renderState` handles `state.offline` with actual state + "Offline" label.
 
 ## Reference
 
 - StreamDock SDK: https://sdk.key123.vip/en/guide/overview.html
-- Reference plugins cloned in `./reference/` (gitignored): `StreamDock-Plugin-SDK/`, `StreamDock-Plugins/`
+- Reference plugins in `./reference/` (gitignored)
