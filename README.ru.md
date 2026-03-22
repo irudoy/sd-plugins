@@ -6,7 +6,7 @@
 
 > **Баги и запросы фич** — [создайте issue](https://github.com/irudoy/sd-plugins/issues)
 
-![Showcase](docs/images/sd-all.jpg)
+<img src="docs/images/sd-all.jpg" width="50%">
 
 Скачайте архивы плагинов со страницы [Releases](https://github.com/irudoy/sd-plugins/releases), распакуйте в директорию плагинов и перезапустите StreamDock:
 - **macOS:** `~/Library/Application Support/HotSpot/StreamDock/plugins/`
@@ -43,7 +43,7 @@
 | **Действия** | 3 |
 | **Поддержка Knob** | — |
 
-![Mac Tools](docs/images/mactools.png)
+<img src="docs/images/mactools.png" width="50%">
 
 <details>
 <summary><b>Drive Info</b> — Keypad</summary>
@@ -122,7 +122,7 @@
 | **Действия** | 9 |
 | **Поддержка Knob** | 5 действий |
 
-![Sprut.Hub](docs/images/spruthub.png)
+<img src="docs/images/spruthub.png" width="50%">
 
 **Настройка:** Откройте Property Inspector любого действия Sprut.Hub, разверните "Connection Settings" и введите **Host**, **Token** и **Serial Number** хаба, нажмите "Test Connection". После подключения выберите комнату, устройство и сервис для каждого действия.
 
@@ -203,7 +203,7 @@
 | **Действия** | 1 |
 | **Поддержка Knob** | Да |
 
-![A Control](docs/images/acontrol.png)
+<img src="docs/images/acontrol.png" width="50%">
 
 <details>
 <summary><b>Speakers</b> — Keypad + Knob</summary>
@@ -226,7 +226,7 @@ Keypad: Mute, DIM, Sleep, выбор входа, Voicing. Knob: регулиро
 | **Действия** | 2 |
 | **Поддержка Knob** | Да |
 
-![Antelope Control](docs/images/antelope.png)
+<img src="docs/images/antelope.png" width="50%">
 
 <details>
 <summary><b>Output</b> — Keypad + Knob</summary>

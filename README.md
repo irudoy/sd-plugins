@@ -6,7 +6,7 @@ Monorepo of plugins for [StreamDock](https://www.key123.vip/en) by MiraBox (also
 
 > **Bugs & feature requests** — feel free to [open an issue](https://github.com/irudoy/sd-plugins/issues)
 
-![Showcase](docs/images/sd-all.jpg)
+<img src="docs/images/sd-all.jpg" width="50%">
 
 Download plugin archives from [Releases](https://github.com/irudoy/sd-plugins/releases), extract to the plugins directory and restart StreamDock:
 - **macOS:** `~/Library/Application Support/HotSpot/StreamDock/plugins/`
@@ -43,7 +43,7 @@ macOS system utilities — disk monitoring, battery tracking for Bluetooth devic
 | **Actions** | 3 |
 | **Knob support** | — |
 
-![Mac Tools](docs/images/mactools.png)
+<img src="docs/images/mactools.png" width="50%">
 
 <details>
 <summary><b>Drive Info</b> — Keypad</summary>
@@ -122,7 +122,7 @@ Smart home control via [Sprut.Hub](https://spruthub.ru/) — a HomeKit-compatibl
 | **Actions** | 9 |
 | **Knob support** | 5 actions |
 
-![Sprut.Hub](docs/images/spruthub.png)
+<img src="docs/images/spruthub.png" width="50%">
 
 **Setup:** Open any Sprut.Hub action's Property Inspector, expand "Connection Settings" and enter your hub's **Host**, **Token**, and **Serial Number**, then click "Test Connection". Once connected, select a room, device, and service for each action.
 
@@ -203,7 +203,7 @@ Control [Adam Audio](https://www.adam-audio.com/) A-Series studio monitors via O
 | **Actions** | 1 |
 | **Knob support** | Yes |
 
-![A Control](docs/images/acontrol.png)
+<img src="docs/images/acontrol.png" width="50%">
 
 <details>
 <summary><b>Speakers</b> — Keypad + Knob</summary>
@@ -226,7 +226,7 @@ Control [Antelope Audio](https://en.antelopeaudio.com/) Zen Quadro SC audio inte
 | **Actions** | 2 |
 | **Knob support** | Yes |
 
-![Antelope Control](docs/images/antelope.png)
+<img src="docs/images/antelope.png" width="50%">
 
 <details>
 <summary><b>Output</b> — Keypad + Knob</summary>
