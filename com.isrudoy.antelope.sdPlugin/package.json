@@ -1,6 +1,6 @@
 {
   "name": "com.isrudoy.antelope",
-  "version": "1.2.2",
+  "version": "1.2.3",
   "description": "Antelope Audio Zen Quadro SC control for StreamDock",
   "main": "plugin/index.js",
   "dependencies": {
