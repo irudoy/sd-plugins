@@ -166,6 +166,7 @@ jobs:
         with:
           name: com.isrudoy.${{ matrix.plugin }}.sdPlugin
           path: com.isrudoy.${{ matrix.plugin }}.sdPlugin-v${{ needs.prepare.outputs.version }}.zip
+          retention-days: 1
 
   release:
     needs: [prepare, build]
