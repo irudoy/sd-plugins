@@ -73,6 +73,8 @@ Run after finishing any work:
 npm run install:all && npm run fmt && npm run lint && npm run typecheck
 ```
 
+**README:** If plugin features, actions, or setup instructions changed — update `README.md` and `README.ru.md`.
+
 ### Testing & Debugging
 ```bash
 node --check com.isrudoy.{name}.sdPlugin/plugin/index.js  # Syntax check
@@ -158,7 +160,7 @@ VPN Status for Unifi Network. Shows name, IP, uptime, traffic. States: Connected
 
 ## acontrol
 
-Adam Audio A-Series control via OCA/AES70 over UDP port 49494. Auto-discovery via mDNS (`_oca._udp.local.`).
+Adam Audio A-Series control via OCA/AES70 over UDP port 49494. Auto-discovery via mDNS (`_oca._udp.local.`). Fallback: macOS `dns-sd` CLI when port 5353 is unavailable (e.g. held by Browser/Arc).
 
 **Single action** `com.isrudoy.acontrol.speakers` — Keypad: Mute/DIM/Sleep/Input/Voicing. Knob: volume dial with configurable step.
 
