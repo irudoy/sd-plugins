@@ -12,10 +12,14 @@ set PLUGIN_DIR=%APPDATA%\HotSpot\StreamDock\plugins\%PLUGIN_NAME%
 set WSL_DIR=%~dp0..\%PLUGIN_NAME%
 
 if exist "%PLUGIN_DIR%" (
-    echo Plugin already linked: %PLUGIN_DIR%
-    echo To re-link, delete the existing link first:
-    echo   rmdir "%PLUGIN_DIR%"
-    goto :end
+    dir /AL "%PLUGIN_DIR%" >nul 2>&1
+    if %errorlevel% equ 0 (
+        echo Removing existing symlink: %PLUGIN_DIR%
+        rmdir "%PLUGIN_DIR%"
+    ) else (
+        echo Removing installed plugin: %PLUGIN_DIR%
+        rmdir /S /Q "%PLUGIN_DIR%"
+    )
 )
 
 mklink /D "%PLUGIN_DIR%" "%WSL_DIR%"
