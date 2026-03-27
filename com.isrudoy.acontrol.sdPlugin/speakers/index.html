@@ -37,7 +37,6 @@
             <div class="sdpi-item-label">On Press</div>
             <select class="sdpi-item-value" id="pressAction" onchange="AControlPI.saveSettings()">
                 <option value="mute">Mute</option>
-                <option value="dim">DIM</option>
                 <option value="sleep">Sleep</option>
                 <optgroup label="Input">
                     <option value="input">Cycle</option>
@@ -51,18 +50,6 @@
                 </optgroup>
             </select>
         </div>
-
-        <div class="sdpi-item" id="dimLevelRow">
-            <div class="sdpi-item-label">DIM Level</div>
-            <select class="sdpi-item-value" id="dimLevel" onchange="AControlPI.saveSettings()">
-                <option value="-10">-10 dB</option>
-                <option value="-20" selected>-20 dB</option>
-                <option value="-30">-30 dB</option>
-            </select>
-        </div>
-        <p class="help-text" id="dimHelp" style="margin-left: 100px; margin-top: -5px;">
-            DIM only works in Advanced mode (Ext. voicing).
-        </p>
 
         <!-- Dial Action (Knob only) -->
         <div class="sdpi-heading">Dial Action (Knob)</div>

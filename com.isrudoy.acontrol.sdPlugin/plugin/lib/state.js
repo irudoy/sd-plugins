@@ -14,7 +14,6 @@
  * @property {number} voicing - Voicing mode (0=Pure, 1=UNR, 2=Ext)
  * @property {number} input - Input source (0=RCA, 1=XLR)
  * @property {boolean} sleeping - Whether speakers are sleeping
- * @property {boolean} dimmed - Whether DIM is active
  * @property {boolean} [error] - Whether there's a connection error
  * @property {boolean} [connecting] - Whether connecting to speakers
  */

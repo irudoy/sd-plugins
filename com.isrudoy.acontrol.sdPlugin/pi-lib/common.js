@@ -102,13 +102,6 @@ const AControlPI = (function () {
       console.log('[AControlPI] Setting volumeStep to:', settings.volumeStep);
       volumeStep.value = settings.volumeStep;
     }
-
-    // DIM level
-    const dimLevel = document.getElementById('dimLevel');
-    if (dimLevel && settings.dimLevel) {
-      console.log('[AControlPI] Setting dimLevel to:', settings.dimLevel);
-      dimLevel.value = settings.dimLevel;
-    }
   }
 
   /**
@@ -162,14 +155,11 @@ const AControlPI = (function () {
     const pressAction = getValue('pressAction', 'mute');
     const dialAction = getValue('dialAction', 'volume');
     const volumeStep = parseInt(getValue('volumeStep', '2'), 10);
-    const dimLevel = parseInt(getValue('dimLevel', '-20'), 10);
-
-    console.log('[AControlPI] Saving:', { pressAction, dialAction, volumeStep, dimLevel });
+    console.log('[AControlPI] Saving:', { pressAction, dialAction, volumeStep });
 
     $settings.pressAction = pressAction;
     $settings.dialAction = dialAction;
     $settings.volumeStep = volumeStep;
-    $settings.dimLevel = dimLevel;
   }
 
   /**

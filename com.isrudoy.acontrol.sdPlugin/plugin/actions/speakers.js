@@ -31,10 +31,9 @@ const {
 
 /**
  * @typedef {Object} SpeakersSettings
- * @property {string} pressAction - Action on press: mute, dim, sleep, input, voicing, input_rca, input_xlr, voicing_pure, voicing_unr, voicing_ext
+ * @property {string} pressAction - Action on press: mute, sleep, input, voicing, input_rca, input_xlr, voicing_pure, voicing_unr, voicing_ext
  * @property {string} dialAction - Action on dial: volume, none
  * @property {number} volumeStep - Volume step in 0.5dB units (1, 2, 4)
- * @property {number} dimLevel - DIM reduction in dB (-10, -20, -30)
  */
 
 /**
@@ -49,7 +48,6 @@ const DEFAULT_SETTINGS = {
   pressAction: 'mute',
   dialAction: 'volume',
   volumeStep: 2, // 1dB per tick (2 * 0.5dB)
-  dimLevel: -20,
 };
 
 // ============================================================
@@ -66,7 +64,6 @@ function getSettingsWithDefaults(settings = {}) {
     pressAction: /** @type {string} */ (settings.pressAction) || DEFAULT_SETTINGS.pressAction,
     dialAction: /** @type {string} */ (settings.dialAction) || DEFAULT_SETTINGS.dialAction,
     volumeStep: /** @type {number} */ (settings.volumeStep) || DEFAULT_SETTINGS.volumeStep,
-    dimLevel: /** @type {number} */ (settings.dimLevel) || DEFAULT_SETTINGS.dimLevel,
   };
 }
 
@@ -211,11 +208,6 @@ async function onKeyUp(context) {
     switch (settings.pressAction) {
       case 'mute':
         await speakerManager.toggleMute();
-        break;
-
-      case 'dim':
-        // Convert dB to level units (each unit = 0.5dB)
-        await speakerManager.toggleDim(settings.dimLevel * 2);
         break;
 
       case 'sleep':

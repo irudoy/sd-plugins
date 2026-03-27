@@ -11,18 +11,8 @@ const $back = false;
  * Update UI visibility based on settings
  */
 function updateVisibility() {
-  const pressAction = document.getElementById('pressAction');
-  const dimLevelRow = document.getElementById('dimLevelRow');
-  const dimHelp = document.getElementById('dimHelp');
   const dialAction = document.getElementById('dialAction');
   const volumeStepRow = document.getElementById('volumeStepRow');
-
-  // Show DIM level only when press action is 'dim'
-  if (dimLevelRow && dimHelp && pressAction) {
-    const showDim = pressAction.value === 'dim';
-    dimLevelRow.style.display = showDim ? '' : 'none';
-    dimHelp.style.display = showDim ? '' : 'none';
-  }
 
   // Show volume step only when dial action is 'volume'
   if (volumeStepRow && dialAction) {
@@ -51,12 +41,8 @@ const $propEvent = {
 
 // Add change listeners to update visibility
 document.addEventListener('DOMContentLoaded', function () {
-  const pressAction = document.getElementById('pressAction');
   const dialAction = document.getElementById('dialAction');
 
-  if (pressAction) {
-    pressAction.addEventListener('change', updateVisibility);
-  }
   if (dialAction) {
     dialAction.addEventListener('change', updateVisibility);
   }
