@@ -213,8 +213,10 @@ async function discoverSpeakers(timeout = DISCOVERY_TIMEOUT) {
   // Try multicast-dns first (cross-platform)
   const result = await discoverWithMdns(timeout);
 
-  // If multicast-dns failed due to port conflict on macOS, try dns-sd CLI
-  if (result === null && process.platform === 'darwin') {
+  // If multicast-dns failed or found nothing on macOS, try dns-sd CLI fallback.
+  // multicast-dns may bind successfully via SO_REUSEPORT but receive no responses
+  // when another process (e.g. Arc browser) holds port 5353.
+  if ((result === null || result.length === 0) && process.platform === 'darwin') {
     return discoverWithDnsSd(timeout);
   }
 
