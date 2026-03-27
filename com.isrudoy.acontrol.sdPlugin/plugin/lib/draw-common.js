@@ -334,57 +334,6 @@ function drawVoicingExtIcon(ctx, x, y, size, color) {
   ctx.restore();
 }
 
-/**
- * Draw DIM icon (speaker with reduced/faded waves)
- * @param {import('@napi-rs/canvas').SKRSContext2D} ctx
- * @param {number} x - Center X
- * @param {number} y - Center Y
- * @param {number} size - Icon size
- * @param {string} color - Icon color
- * @param {boolean} [dimmed=false] - Whether DIM is active
- */
-function drawDimIcon(ctx, x, y, size, color, dimmed = false) {
-  const scale = size / 70;
-
-  ctx.save();
-  ctx.translate(x, y);
-  ctx.scale(scale, scale);
-
-  ctx.fillStyle = color;
-  ctx.strokeStyle = color;
-  ctx.lineWidth = 3;
-  ctx.lineCap = 'round';
-
-  // Speaker body (shifted left)
-  ctx.beginPath();
-  ctx.moveTo(-22, -8);
-  ctx.lineTo(-10, -8);
-  ctx.lineTo(0, -18);
-  ctx.lineTo(0, 18);
-  ctx.lineTo(-10, 8);
-  ctx.lineTo(-22, 8);
-  ctx.closePath();
-  ctx.fill();
-
-  if (dimmed) {
-    // When dimmed: single small wave, faded
-    ctx.globalAlpha = 0.4;
-    ctx.beginPath();
-    ctx.arc(8, 0, 10, -Math.PI / 3, Math.PI / 3);
-    ctx.stroke();
-  } else {
-    // When not dimmed: two waves
-    ctx.beginPath();
-    ctx.arc(8, 0, 10, -Math.PI / 3, Math.PI / 3);
-    ctx.stroke();
-    ctx.beginPath();
-    ctx.arc(8, 0, 18, -Math.PI / 3, Math.PI / 3);
-    ctx.stroke();
-  }
-
-  ctx.restore();
-}
-
 // ============================================================
 // Status Bar Drawing
 // ============================================================
@@ -488,7 +437,6 @@ function formatLevel(level) {
 /** @type {Record<string, string>} */
 const ACTION_LABELS = {
   mute: 'Mute',
-  dim: 'DIM',
   sleep: 'Sleep',
   input: 'Input',
   input_rca: 'RCA',
@@ -524,9 +472,6 @@ function drawActionIcon(ctx, pressAction, x, y, size, color, state) {
   switch (pressAction) {
     case 'mute':
       drawSpeakerIcon(ctx, x, y, size, color, state.muted);
-      break;
-    case 'dim':
-      drawDimIcon(ctx, x, y, size, color, state.dimmed);
       break;
     case 'sleep':
       drawMoonIcon(ctx, x, y, size, color);
@@ -579,12 +524,6 @@ function getActionStatus(pressAction, state) {
   switch (pressAction) {
     case 'mute':
       return state.muted ? 'Muted' : formatLevel(state.level);
-    case 'dim':
-      // DIM only works in Advanced mode (Ext. voicing)
-      if (!isVolumeAvailable(state)) {
-        return 'N/A (Backplate)';
-      }
-      return state.dimmed ? 'DIM On' : formatLevel(state.level);
     case 'sleep':
       return state.sleeping ? 'Sleeping' : 'Awake';
     case 'input':
@@ -602,6 +541,49 @@ function getActionStatus(pressAction, state) {
 }
 
 /**
+ * Draw D M S status indicators at the top of the button
+ * Shows active mute/sleep states, skipping the one matching current action
+ * @param {import('../../node_modules/@napi-rs/canvas').SKRSContext2D} ctx
+ * @param {import('./state').SpeakerState} state
+ * @param {string} pressAction - Current action
+ */
+/**
+ * Draw D M S status indicators at the top-right corner
+ * Shows active mute/sleep states, skipping the one matching current action
+ * @param {import('../../node_modules/@napi-rs/canvas').SKRSContext2D} ctx
+ * @param {import('./state').SpeakerState} state
+ * @param {string} pressAction - Current action
+ * @param {number} [width] - Canvas width (default: CANVAS_SIZE)
+ */
+function drawStatusIndicators(ctx, state, pressAction, width) {
+  const indicators = [
+    { label: 'M', active: state.muted, action: 'mute', color: COLORS.muted },
+    { label: 'S', active: state.sleeping, action: 'sleep', color: COLORS.sleep },
+  ];
+
+  // Only draw indicators that are active and don't match current action
+  const visible = indicators.filter((i) => i.active && i.action !== pressAction);
+  if (visible.length === 0) return;
+
+  const w = width || CANVAS_SIZE;
+  const y = 14;
+  const spacing = 20;
+  const startX = w - 10 - (visible.length - 1) * spacing;
+
+  ctx.font = 'bold 14px sans-serif';
+  ctx.textAlign = 'right';
+  ctx.textBaseline = 'top';
+
+  for (let i = 0; i < visible.length; i++) {
+    ctx.fillStyle = visible[i].color;
+    ctx.fillText(visible[i].label, startX + i * spacing, y);
+  }
+
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'alphabetic';
+}
+
+/**
  * Render speaker state on Keypad (144x144)
  * @param {import('./state').SpeakerState} state
  * @param {Record<string, unknown>} [settings] - Action settings
@@ -611,10 +593,8 @@ function renderKeypadState(state, settings = {}) {
   const { canvas, ctx } = createButtonCanvas();
   const pressAction = /** @type {string} */ (settings.pressAction) || 'mute';
 
-  // Check if action is unavailable (DIM in Backplate mode)
-  const isDimUnavailable = pressAction === 'dim' && !isVolumeAvailable(state);
-
   // Determine colors based on state
+  // Main icon is colored only when the active status matches the action
   let iconColor = COLORS.active;
   let textColor = COLORS.white;
 
@@ -624,18 +604,15 @@ function renderKeypadState(state, settings = {}) {
   } else if (state.error) {
     iconColor = COLORS.gray;
     textColor = COLORS.gray;
-  } else if (isDimUnavailable) {
-    // DIM unavailable in Backplate mode - gray out
-    iconColor = COLORS.gray;
-    textColor = COLORS.gray;
-  } else if (state.muted) {
+  } else if (state.muted && pressAction === 'mute') {
     iconColor = COLORS.muted;
-    textColor = COLORS.gray;
-  } else if (state.dimmed) {
-    iconColor = COLORS.dim;
-  } else if (state.sleeping) {
-    iconColor = COLORS.gray;
-    textColor = COLORS.gray;
+  } else if (state.sleeping && pressAction === 'sleep') {
+    iconColor = COLORS.sleep;
+  }
+
+  // Draw status indicators (D M S) at the top
+  if (!state.connecting && !state.error) {
+    drawStatusIndicators(ctx, state, pressAction);
   }
 
   // Draw action-specific icon
@@ -652,11 +629,11 @@ function renderKeypadState(state, settings = {}) {
       ? ''
       : getActionStatus(pressAction, state);
   if (statusText) {
-    drawStatusText(ctx, statusText, iconColor);
+    drawStatusText(ctx, statusText, textColor);
   }
 
-  // Draw level bar (skip if DIM unavailable)
-  if (!state.connecting && !state.error && !isDimUnavailable) {
+  // Draw level bar
+  if (!state.connecting && !state.error) {
     drawLevelBar(ctx, state.level, iconColor);
   }
 
@@ -671,11 +648,13 @@ function renderKeypadState(state, settings = {}) {
  */
 function renderKnobState(state, settings) {
   const { canvas, ctx } = createKnobCanvas();
+  const pressAction = /** @type {string} */ (settings.pressAction) || 'mute';
 
   // Check if volume is unavailable (Ext. voicing mode)
   const volumeUnavailable = !isVolumeAvailable(state);
 
   // Determine colors based on state
+  // Knob icon is speaker — colored only when muted (matches knob's primary function)
   let iconColor = COLORS.active;
   let textColor = COLORS.white;
 
@@ -688,8 +667,14 @@ function renderKnobState(state, settings) {
   } else if (state.muted) {
     iconColor = COLORS.muted;
     textColor = COLORS.gray;
-  } else if (state.dimmed) {
-    iconColor = COLORS.dim;
+  } else if (state.sleeping) {
+    iconColor = COLORS.gray;
+    textColor = COLORS.gray;
+  }
+
+  // Draw status indicators (D M S) at the top-right
+  if (!state.connecting && !state.error) {
+    drawStatusIndicators(ctx, state, pressAction, KNOB_WIDTH);
   }
 
   // Always draw speaker icon for Knob (main function is volume control)
@@ -735,8 +720,6 @@ function renderKnobState(state, settings) {
     // Show level when muted as secondary info
     ctx.fillStyle = COLORS.gray;
     ctx.fillText(formatLevel(state.level), KNOB_LAYOUT.statusX, 105);
-  } else if (state.dimmed) {
-    ctx.fillText('DIM active', KNOB_LAYOUT.statusX, 105);
   } else if (volumeUnavailable && settings.dialAction === 'volume') {
     ctx.fillStyle = COLORS.gray;
     ctx.fillText('Backplate mode', KNOB_LAYOUT.statusX, 105);
@@ -760,7 +743,6 @@ function renderConnecting(controller, settings = {}) {
     voicing: 0,
     input: 0,
     sleeping: false,
-    dimmed: false,
     connecting: true,
   };
 
@@ -785,7 +767,6 @@ function renderNotConfigured(controller, settings = {}) {
     voicing: 0,
     input: 0,
     sleeping: false,
-    dimmed: false,
   };
 
   if (controller === 'Knob') {
