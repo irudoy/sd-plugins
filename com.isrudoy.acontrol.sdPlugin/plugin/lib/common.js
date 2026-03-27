@@ -62,7 +62,7 @@ const COLORS = {
   active: '#FFFFFF', // White for active/unmuted
   muted: '#FF6F91', // Red/pink for muted
   yellow: '#FFC107', // Connecting
-  dim: '#FFA726', // Orange for DIM mode
+  sleep: '#3A5A8C', // Dark blue for sleep mode
 };
 
 // ============================================================

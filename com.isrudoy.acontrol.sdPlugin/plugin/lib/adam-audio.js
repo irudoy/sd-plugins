@@ -32,8 +32,6 @@ const MAX_RETRIES = 3;
  * @property {number} voicing - 0=Pure, 1=UNR, 2=Ext
  * @property {number} input - 0=RCA, 1=XLR
  * @property {boolean} sleeping
- * @property {boolean} dimmed
- * @property {number} dimSavedLevel - Saved level before DIM was enabled
  */
 
 /**
@@ -61,8 +59,6 @@ class AdamAudioClient extends EventEmitter {
       voicing: 0,
       input: 0,
       sleeping: false,
-      dimmed: false,
-      dimSavedLevel: 0,
     };
   }
 
@@ -262,12 +258,10 @@ class AdamAudioClient extends EventEmitter {
 
   /**
    * Get mute state
-   * Note: Adam Audio doesn't support GET for mute, returns cached state
    * @returns {Promise<boolean>} true if muted
    */
   async getMute() {
-    // Adam Audio doesn't support reading mute state via OCA
-    // Return locally tracked state
+    // GET mute returns stale data — OCA set doesn't update the readable register
     return this.state.muted;
   }
 
@@ -316,7 +310,7 @@ class AdamAudioClient extends EventEmitter {
    * @returns {Promise<SpeakerState>}
    */
   async fetchState() {
-    await Promise.all([this.getLevel(), this.getVoicing(), this.getInput()]);
+    await Promise.all([this.getLevel(), this.getVoicing(), this.getInput(), this.getSleep()]);
     return this.state;
   }
 
@@ -424,6 +418,19 @@ class AdamAudioClient extends EventEmitter {
   }
 
   /**
+   * Get sleep state
+   * @returns {Promise<boolean>} Whether speakers are sleeping
+   */
+  async getSleep() {
+    const obj = OCA_OBJECTS.SLEEP;
+    const result = await this.sendCommand(obj.oNo, obj.get.level, obj.get.index);
+    // Sleep is OcaUint16: 0=awake, 1=sleeping
+    const value = decodeUint16(result, 0);
+    this.state.sleeping = value === 1;
+    return this.state.sleeping;
+  }
+
+  /**
    * Set sleep state
    * @param {boolean} sleeping
    * @returns {Promise<void>}
@@ -441,7 +448,7 @@ class AdamAudioClient extends EventEmitter {
    * @returns {Promise<boolean>} New sleep state
    */
   async toggleSleep() {
-    // Sleep state is not readable, so we toggle based on local state
+    await this.getSleep();
     await this.setSleep(!this.state.sleeping);
     return this.state.sleeping;
   }
@@ -455,31 +462,6 @@ class AdamAudioClient extends EventEmitter {
     // LED blink uses OcaUint16 with value 0x0101
     const params = encodeUint16(0x0101);
     await this.sendCommand(obj.oNo, obj.set.level, obj.set.index, params);
-  }
-
-  // ==================== DIM Implementation ====================
-
-  /**
-   * Toggle DIM mode (software implementation)
-   * Saves current level, reduces by dimAmount, or restores
-   * @param {number} [dimAmount=-40] - Amount to reduce in level units (each unit = 0.5dB, so -40 = -20dB)
-   * @returns {Promise<boolean>} New dimmed state
-   */
-  async toggleDim(dimAmount = -40) {
-    await this.getLevel();
-
-    if (this.state.dimmed) {
-      // Restore saved level
-      await this.setLevel(this.state.dimSavedLevel);
-      this.state.dimmed = false;
-    } else {
-      // Save current level and dim
-      this.state.dimSavedLevel = this.state.level;
-      await this.setLevel(this.state.level + dimAmount);
-      this.state.dimmed = true;
-    }
-
-    return this.state.dimmed;
   }
 }
 

@@ -41,10 +41,6 @@ class SpeakerManager extends EventEmitter {
 
     /** @type {number} */
     this.refCount = 0;
-
-    // DIM state (shared across all speakers)
-    this.dimmed = false;
-    this.dimSavedLevel = 0;
   }
 
   /**
@@ -177,24 +173,30 @@ class SpeakerManager extends EventEmitter {
 
     // Fetch initial state from first connected speaker
     if (this.clients.size > 0) {
-      // Initialize default state so UI shows "connected"
-      log('[SpeakerManager] connectAll: setting default state');
-      this.state = {
-        muted: false,
-        level: 0,
-        voicing: 0,
-        input: 0,
-        sleeping: false,
-        dimmed: false,
-        dimSavedLevel: 0,
-      };
-      this.emit('connected');
-
-      // Try to fetch actual state (don't block on it)
       log('[SpeakerManager] connectAll: fetching actual state');
-      this.fetchState().catch((err) => {
+      try {
+        await this.fetchState();
+      } catch (err) {
         log(`Initial fetchState failed: ${err.message}`);
-      });
+        // Set default state as fallback
+        this.state = {
+          muted: false,
+          level: 0,
+          voicing: 0,
+          input: 0,
+          sleeping: false,
+        };
+      }
+
+      // Unmute on connect (mute state is not readable, ensure clean start)
+      try {
+        await this.broadcast('setMute', false);
+        if (this.state) this.state.muted = false;
+      } catch (err) {
+        log(`Initial unmute failed: ${err.message}`);
+      }
+
+      this.emit('connected');
     }
   }
 
@@ -300,8 +302,6 @@ class SpeakerManager extends EventEmitter {
 
     try {
       this.state = await client.fetchState();
-      // Add DIM state
-      this.state.dimmed = this.dimmed;
       this.emit('stateChanged', this.state);
       return this.state;
     } catch (err) {
@@ -463,38 +463,6 @@ class SpeakerManager extends EventEmitter {
     const newSleeping = !(this.state?.sleeping ?? false);
     await this.setSleep(newSleeping);
     return newSleeping;
-  }
-
-  /**
-   * Toggle DIM on all speakers (software implementation)
-   * @param {number} [dimAmount=-40] - Amount to reduce in level units (each unit = 0.5dB, so -40 = -20dB)
-   * @returns {Promise<boolean>} New dimmed state
-   */
-  async toggleDim(dimAmount = -40) {
-    // Fetch current level first
-    await this.fetchState();
-
-    if (this.dimmed) {
-      // Restore saved level
-      await this.setLevel(this.dimSavedLevel);
-      this.dimmed = false;
-      if (this.state) {
-        this.state.dimmed = false;
-      }
-    } else {
-      // Save current level and dim
-      this.dimSavedLevel = this.state?.level ?? 0;
-      // Clamp to minimum -40 (-20dB)
-      const dimLevel = Math.max(-40, this.dimSavedLevel + dimAmount);
-      await this.setLevel(dimLevel);
-      this.dimmed = true;
-      if (this.state) {
-        this.state.dimmed = true;
-      }
-    }
-
-    this.emit('stateChanged', this.state);
-    return this.dimmed;
   }
 
   /**

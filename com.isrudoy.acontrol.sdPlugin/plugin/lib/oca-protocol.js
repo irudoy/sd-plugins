@@ -28,6 +28,7 @@ const PDU_TYPE = {
 const OCA_OBJECTS = {
   MUTE: {
     // 33619989 = 0x02010015 (NOT 0x02010005 as in PROTOCOL.md - typo)
+    // GET returns stale data — OCA set doesn't update the readable register
     oNo: 0x02010015,
     set: { level: 4, index: 2 },
   },
@@ -49,6 +50,7 @@ const OCA_OBJECTS = {
   SLEEP: {
     // 50528364 = 0x0303006c (from Python reference)
     oNo: 0x0303006c,
+    get: { level: 4, index: 1 },
     set: { level: 4, index: 2 },
   },
   LED: {
